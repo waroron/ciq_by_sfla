@@ -4,6 +4,7 @@ import cv2
 import time
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
+from sklearn.decomposition import PCA
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -194,6 +195,126 @@ def BTPD_WTSE(S, M, h):
     return color_palette
 
 
+def EBW_CIQ(S, M):
+    C = []
+    R = []
+    m = []
+    N = []
+    q = []
+    M_0 = 0
+
+    def get_R(c):
+        sum = (c[0] * c[0].T).copy()
+        for s in c[1:]:
+            tmp = s * s.T
+            sum += tmp
+        return sum
+
+    def get_m(c):
+        sum = c[0].copy()
+        for s in c[1:]:
+            sum += s
+        return sum
+
+    def get_N(c):
+        return len(c)
+
+
+    C.append(S)
+    R.append(get_R(C[0]))
+    m.append(get_m(C[0]))
+    N.append(get_N(C[0]))
+    q.append(m[0] / N[0])
+
+    for num in range(M - 1):
+        R_ = R[num] - (m[num] * m[num].T) / N[num]
+        W, v = np.linalg.eig(R_)
+        e = v[np.argmax(W)]
+
+        criteria = np.dot(e, q[num][0])
+        compare = np.dot(e, C[num][:, 0, :].T)
+        c_2n_index = np.where(compare <= criteria)
+        c_2n1_index = np.where(compare > criteria)
+        num_c2n = len(c_2n_index[0])
+        num_c2n1 = len(c_2n1_index[0])
+
+        c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
+        c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
+
+        C.append(c_2n)
+        C.append(c_2n1)
+
+        R.append(get_R(c_2n))
+        m.append(get_m(c_2n))
+        N.append(get_N(c_2n))
+        q.append(m[-1] / N[-1])
+
+        R.append(R[num] - R[-1])
+        m.append(m[num] - m[-1])
+        N.append(N[num] - N[-1])
+        q.append(m[-1] / N[-1])
+
+    color_palette = np.round(q[len(q) - M:])
+    return color_palette
+
+
+def Wu_method(S, K):
+    N = len(S)
+    E = np.empty(shape=(N))
+    L = np.empty(shape=(K, K))
+    listed_S = np.empty(shape=S.shape)
+
+    # initialization
+    # numpy使って共分散行列を算出した後，最大固有値の固有ベクトルからprojectionしようと思ったが
+    # MemoryError吐くのでPCAクラスを直接使った．PCAを用いた際の動きが，論文中に詳しく記載されていなかったが
+    # 数式を見るに，おそらくPCAを使って全画素のデータを1次元に変換したときと等価だと思われる．
+    pca = PCA(n_components=1)
+    pca.fit(S[:, 0, :])
+    # C = np.cov(S)
+    # W, _v = np.linalg.eig(C)
+    # v = _v[np.argmax(W)]
+    # v = pca.components_
+    mapping = np.reshape(pca.transform(S[:, 0, :]), (N))
+    sorted_index = np.argsort(mapping)
+    listed_S = S[sorted_index]
+    listed_mapping = mapping[sorted_index]
+
+    def quantized_error(a, b):
+        z = np.median(listed_S[a:b - 1])
+        err = 0
+        for c in listed_S[a:b - 1]:
+            err += np.linalg.norm(c - z)
+        return err
+
+    def Lchain(k, n):
+        t = n
+        q = np.empty(shape=())
+        for j in range(k - 1, 0, -1):
+            t = L[j + 1, t]
+            q[j] = L[j + 1, t]
+        return q
+    print('test')
+    for num in range(1, N + 1):
+        E[num] = quantized_error(0, num)
+    print('test')
+    for num in range(1, K + 1):
+        L[num, num] = num - 1
+
+    for k in range(2, K):
+        print(k)
+        for n in range(k + 1, N - K + k):
+            cut = n - 1
+            e = E[n - 1]
+            for t in range(n - 2, k - 1, -1):
+                q_err = quantized_error(t, n)
+                if E[t] + q_err < e:
+                    cut = t
+                    e = E[t] + q_err
+                L[k, n] = cut
+                E[n] = e
+    return Lchain(K, N)
+
+
 def OneMaxBySFLA():
     def fit(frog):
         overflow_index = np.where(frog >= 0.5)
@@ -218,6 +339,13 @@ def BTPD_CIQ(img, M):
     """
     S = np.reshape(img, (img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
     color_palette = BTPD(S, M)
+
+    return color_palette
+
+
+def Wu_CIQ(img, M):
+    S = np.reshape(img, (img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+    color_palette = Wu_method(S, M)
 
     return color_palette
 
@@ -249,7 +377,7 @@ def KMeans_CIQ(S, K, n_iterations=None, init_array=None):
 
 
 def CQ_ABC(img, K):
-
+    pass
 
 
 def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2):
@@ -342,7 +470,26 @@ def CIQ_test_PSO():
         print('\n\n')
 
 
+def CIQ_test_Wu():
+    DIR = 'sumple_img'
+    M = 16
+    imgs = os.listdir(DIR)
+
+    for img_path in imgs:
+        path = os.path.join(DIR, img_path)
+        img = cv2.imread(path)
+        st = time.time()
+        q = Wu_CIQ(img, M)
+        en = time.time()
+        print('{}: {} colors pallete by Wu\'s method: time {}'.format(img_path, M, en - st))
+        for pix in q:
+            print(pix)
+
+        print('\n\n')
+
+
 if __name__ == '__main__':
     # CIQ_test_BTPD()
-    CIQ_test_PSO()
+    # CIQ_test_PSO()
     # OneMaxBySFLA()
+    CIQ_test_Wu()

@@ -545,7 +545,7 @@ def CIQ_test_KMeans():
     def ciq(img):
         S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
         kmeans, q = KMeans_CIQ(S, M)
-        return q
+        return kmeans.cluster_centers_
 
     CIQ_test(ciq, SAVE, DIR)
 
@@ -592,8 +592,8 @@ def mapping_pallet_to_img(img, pallete):
 
 if __name__ == '__main__':
     # CIQ_test_BTPD()
-    CIQ_test_KMeans()
+    # CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()
     # CIQ_test_Wu()
-    # CIQ_test_SFLA()
+    CIQ_test_SFLA()

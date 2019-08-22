@@ -2,9 +2,11 @@ import numpy as np
 import os
 import cv2
 import time
+import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
+from skimage.measure import compare_mse, compare_psnr
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -22,6 +24,7 @@ def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
 
     shuffled_frogs = init_frogs.copy()
     hist_frogs.append(shuffled_frogs)
+    global_best_index = 0
     for t in range(T_max):
         shuffled_index = np.random.permutation(perm)
         shuffled_frogs = shuffled_frogs[shuffled_index]
@@ -29,8 +32,7 @@ def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
         global_best_index = np.argmax(shuffled_fitness)
         hist_bestfrogs.append(shuffled_frogs[global_best_index])
 
-        print('best frog: {} \n best score: {}'.format(shuffled_frogs[global_best_index],
-                                                       shuffled_fitness[global_best_index]))
+        print('{} gens:  best score: {}'.format(t, shuffled_fitness[global_best_index]))
 
         # divide all frogs into several memeplexes
         assert n_frogs % n_mem == 0, "wrong setting of num_frogs or num_memeplex"
@@ -83,7 +85,6 @@ def BTPD(S, M):
     def get_N(c):
         return len(c)
 
-
     C.append(S)
     R.append(get_R(C[0]))
     m.append(get_m(C[0]))
@@ -119,6 +120,7 @@ def BTPD(S, M):
         q.append(m[-1] / N[-1])
 
     color_palette = np.round(q[len(q) - M:])
+
     return color_palette
 
 
@@ -373,11 +375,26 @@ def KMeans_CIQ(S, K, n_iterations=None, init_array=None):
     # X_new = kmeans.fit_transform(features)
     kmeans.fit(features)
     X_new = kmeans.cluster_centers_[kmeans.labels_]
+
     return kmeans, X_new
 
 
 def CQ_ABC(img, K):
     pass
+
+
+def CIEDE76(img1, img2):
+    img1_lab = cv2.cvtColor(img1, cv2.COLOR_BGR2Lab)
+    img2_lab = cv2.cvtColor(img2, cv2.COLOR_BGR2Lab)
+
+    # Cab_1 = np.sqrt(img1_lab[1] ** 2 + img1_lab[2] ** 2)
+    # Cab_2 = np.sqrt(img2_lab[1] ** 2 + img2_lab[2] ** 2)
+    #
+    # hab_1 = np.arctan(img1_lab[2] / img1_lab[1])
+    # hab_2 = np.arctan(img2_lab[2] / img2_lab[1])
+
+    dist = np.linalg.norm(img1_lab - img2_lab)
+    return dist
 
 
 def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2):
@@ -427,25 +444,64 @@ def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2):
     return particles
 
 
-def CIQ_test_BTPD():
-    DIR = 'sumple_img'
-    M = 16
-    imgs = os.listdir(DIR)
+def compare_labmse(img1, img2):
+    img1_lab = cv2.cvtColor(img1, cv2.COLOR_BGR2Lab)
+    img2_lab = cv2.cvtColor(img2, cv2.COLOR_BGR2Lab)
 
-    for img_path in imgs:
+    return compare_mse(img1_lab, img2_lab)
+
+
+def CIQ_test(ciq, test_name, test_img='sumple_img'):
+    DIR = test_img
+    SAVE = test_name
+    imgs = os.listdir(DIR)
+    INDICES = ['MSE', 'PSNR', 'Lab_MSE']
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
+        save_path = os.path.join(SAVE, img_path)
         img = cv2.imread(path)
         st = time.time()
-        q = BTPD_CIQ(img, M)
+        palette = ciq(img)
         en = time.time()
-        print('{}: {} colors pallete by BTPD: time {}'.format(img_path, M, en - st))
-        for pix in q:
-            print(pix)
+        mapped = mapping_pallet_to_img(img, palette)
+        mapped = np.reshape(mapped, newshape=img.shape)
 
-        print('\n\n')
+        # eval
+        mse = compare_mse(img, mapped)
+        psnr = compare_psnr(img, mapped)
+        lab_mse = compare_labmse(img, mapped)
+
+        df = pd.DataFrame([[mse, psnr, lab_mse]], columns=INDICES)
+        csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
+
+        if num != 0:
+            pre_csv = pd.read_csv(csv_path)
+            df = pre_csv.append(df)
+        df.to_csv(csv_path)
+
+        print('{} , by {}, calc time {}s'.format(img_path, test_name, en - st))
+        # mapped = mapping_pallet_to_img(img, q)
+        cv2.imwrite(save_path, mapped)
+
+
+def CIQ_test_BTPD():
+    DIR = 'sumple_img'
+    SAVE = 'BTPD'
+    M = 16
+
+    def ciq(img):
+        q = BTPD_CIQ(img, M)
+        return q
+
+    CIQ_test(ciq, SAVE)
 
 
 def CIQ_test_PSO():
+    TEST_NAME = 'PSO_CIQ'
     DIR = 'sumple_img'
     K = 16
     t_max = 100
@@ -455,19 +511,12 @@ def CIQ_test_PSO():
     w = 0.729
     c1 = 1.4955
     c2 = 1.4955
-    imgs = os.listdir(DIR)
 
-    for img_path in imgs:
-        path = os.path.join(DIR, img_path)
-        img = cv2.imread(path)
-        st = time.time()
-        q = PSO_CIQ(img, K, n_p, t_max, p_kmeans, kmeans_iteration, w, c1, c2)
-        en = time.time()
-        print('{}: {} colors pallete by PSO: time {}'.format(img_path, K, en - st))
-        for pix in q:
-            print(pix)
+    def ciq(img):
+        palette = PSO_CIQ(img, K, n_p, t_max, p_kmeans, kmeans_iteration, w, c1, c2)
+        return palette
 
-        print('\n\n')
+    CIQ_test(ciq, TEST_NAME, DIR)
 
 
 def CIQ_test_Wu():
@@ -488,8 +537,63 @@ def CIQ_test_Wu():
         print('\n\n')
 
 
+def CIQ_test_KMeans():
+    DIR = 'sumple_img'
+    SAVE = 'KMeans'
+    M = 16
+
+    def ciq(img):
+        S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
+        kmeans, q = KMeans_CIQ(S, M)
+        return q
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
+def CIQ_test_SFLA():
+    K = 16
+
+    def create_color_palette():
+        return np.random.randint(0, 256, size=(K, 3))
+
+    DIR = 'sumple_img'
+    SAVE = 'SFLA_LabPSNR'
+
+    def ciq(img):
+        def psnr(frog):
+            mapped = mapping_pallet_to_img(img, frog)
+            psnr = compare_psnr(img, mapped)
+            return psnr
+
+        def Lab_psnr(frog):
+            mapped = mapping_pallet_to_img(img, frog)
+            img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+            mapped_lab = cv2.cvtColor(mapped, cv2.COLOR_BGR2Lab)
+            psnr = compare_psnr(img_lab, mapped_lab)
+            return psnr
+
+        frog, _, __ = SFLA(Lab_psnr, create_color_palette)
+        return frog
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
+def mapping_pallet_to_img(img, pallete):
+    dists = np.empty(shape=(img.shape[0], img.shape[1], len(pallete)))
+    for num, pal in enumerate(pallete):
+        dist = np.linalg.norm(img - pal, axis=2)
+        dists[:, :, num] = dist
+
+    pal = np.argmin(dists, axis=2)
+    mapped_img = pallete[pal].astype(np.uint8)
+
+    return mapped_img
+
+
 if __name__ == '__main__':
     # CIQ_test_BTPD()
+    CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()
-    CIQ_test_Wu()
+    # CIQ_test_Wu()
+    # CIQ_test_SFLA()

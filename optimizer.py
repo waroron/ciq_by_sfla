@@ -261,11 +261,6 @@ def EBW_CIQ(S, M):
 
 
 def Wu_method(S, K):
-    N = len(S)
-    E = np.empty(shape=(N))
-    L = np.empty(shape=(K, K))
-    listed_S = np.empty(shape=S.shape)
-
     # initialization
     # numpy使って共分散行列を算出した後，最大固有値の固有ベクトルからprojectionしようと思ったが
     # MemoryError吐くのでPCAクラスを直接使った．PCAを用いた際の動きが，論文中に詳しく記載されていなかったが
@@ -276,44 +271,89 @@ def Wu_method(S, K):
     # W, _v = np.linalg.eig(C)
     # v = _v[np.argmax(W)]
     # v = pca.components_
-    mapping = np.reshape(pca.transform(S[:, 0, :]), (N))
+    mapping = np.reshape(pca.transform(S[:, 0, :]), len(S))
+    # N projections into M < N buckets
+    M = 128
+    sumpled_mapping = mapping[::M]
+    print('{} --> {}'.format(len(S), len(sumpled_mapping)))
+    N = len(sumpled_mapping)
+    E = np.empty(shape=N - 1)
+    L = np.empty(shape=(K, N))
+    listed_S = np.empty(shape=S.shape)
+
     sorted_index = np.argsort(mapping)
     listed_S = S[sorted_index]
     listed_mapping = mapping[sorted_index]
 
+    def Lchain(k, n):
+        t = n - 1
+        q = np.empty(shape=K + 1)
+        for j in range(k - 1, -1, -1):
+            q[j] = L[j, t]
+            t = int(L[j, t])
+            print(t)
+        return q
+
+    def W0(n):
+        return len(listed_S[:n])
+
+    def W1(d, n):
+        cd = 0
+        for c in listed_S[:n]:
+            cd += c[:, d]
+        return cd
+
+    def W2(n):
+        cd = 0
+        for c in listed_S[:n]:
+            cd += np.sum(c) ** 2
+        return cd
+
+    print('start preconputing')
+    # precompute for evaluating error
+    w0 = np.empty(shape=N)
+    w1 = np.empty(shape=(3, N))
+    w2 = np.empty(shape=N)
+
+    for n in range(N):
+        w0[n] = W0(n + 1)
+        w2[n] = W2(n + 1)
+        print(n)
+        for d in range(2):
+            w1[d, n] = W1(d, n + 1)
+
     def quantized_error(a, b):
+        """
         z = np.median(listed_S[a:b - 1])
         err = 0
         for c in listed_S[a:b - 1]:
             err += np.linalg.norm(c - z)
         return err
+        だとめちゃくちゃ遅いので，Section4.4よりlinear timeで計算するために工夫する
+        """
+        frac = np.sum((w1[:, b] - w1[:, a]) ** 2) / (w0[b] - w0[a])
+        return w2[b] - w2[a] - frac
 
-    def Lchain(k, n):
-        t = n
-        q = np.empty(shape=())
-        for j in range(k - 1, 0, -1):
-            t = L[j + 1, t]
-            q[j] = L[j + 1, t]
-        return q
-    print('test')
-    for num in range(1, N + 1):
-        E[num] = quantized_error(0, num)
-    print('test')
-    for num in range(1, K + 1):
+    for num in range(1, N):
+        # 実際はe(0, 0)は存在しないため(0, 0) --> (0, 1)と置き換えている
+        E[num - 1] = quantized_error(0, num)
+
+    for num in range(0, K):
         L[num, num] = num - 1
 
-    for k in range(2, K):
+    print('initialization over')
+    for k in range(2, K + 1):
         print(k)
-        for n in range(k + 1, N - K + k):
+        for n in range(k + 1, N - K + k + 1):
             cut = n - 1
-            e = E[n - 1]
-            for t in range(n - 2, k - 1, -1):
-                q_err = quantized_error(t, n)
+            e = E[n - 2]
+            for t in range(n - 2, k - 2, -1):
+                q_err = quantized_error(t, n - 1)
                 if E[t] + q_err < e:
                     cut = t
                     e = E[t] + q_err
-                L[k, n] = cut
-                E[n] = e
+            L[k - 1, n - 1] = cut
+            E[n - 2] = e
     return Lchain(K, N)
 
 
@@ -595,5 +635,5 @@ if __name__ == '__main__':
     # CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()
-    # CIQ_test_Wu()
-    CIQ_test_SFLA()
+    CIQ_test_Wu()
+    # CIQ_test_SFLA()

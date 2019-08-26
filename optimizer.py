@@ -7,6 +7,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_mse, compare_psnr
+from img_util import get_saliency_upper_th
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -578,7 +579,7 @@ def CIQ_test_Wu():
 
 
 def CIQ_test_KMeans():
-    DIR = 'sumple_img'
+    DIR = 'sumple_org'
     SAVE = 'KMeans'
     M = 16
 
@@ -618,6 +619,106 @@ def CIQ_test_SFLA():
     CIQ_test(ciq, SAVE, DIR)
 
 
+def CIQ_test_besed_on_SM():
+    DIR = 'sumple_org'
+    SAVE = 'KMeans_SMbased'
+    M = 16
+    R = 0.5
+
+    def ciq(img):
+        extract = get_saliency_upper_th(img, R)
+        S = np.reshape(extract, newshape=(len(extract), img.shape[2]))
+        kmeans, q = KMeans_CIQ(S, M)
+        return kmeans.cluster_centers_
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
+def CIQ_test_sup1():
+    # 少数色でも顕著度が高ければ保存する
+    # --> 顕著度ヒストグラムが一様になるように高顕著度の色を増やしてCIQ
+    M = 16
+    R = 0.25
+    P = 10
+    DIR = 'sumple_img'
+    SAVE = 'KMeans_Sup1_R{:.2g}'.format(R)
+
+    def ciq(img):
+        extract = get_saliency_upper_th(img, R, partition=True)
+        partition = int(len(extract) / P)
+
+        parted_extract = []
+        for num in range(0, len(extract), partition):
+            
+            tmp = extract[num: num + partition + 1]
+            arr = np.reshape(tmp, newshape=(len(tmp), 3))
+            parted_extract.append(arr)
+
+        parted_extract = np.array(parted_extract)
+        S = []
+        l = len(parted_extract)
+        for num in range(l):
+            n = len(parted_extract[num])
+            th = len(parted_extract[l - num - 1])
+            count = 0
+            if n <= 0:
+                continue
+            S.extend(parted_extract[num])
+            count += n
+            while count < th:
+                S.extend(parted_extract[num])
+                count += n
+
+        S = np.reshape(np.array(S), newshape=(len(S), img.shape[2]))
+        kmeans, q = KMeans_CIQ(S, M)
+        return kmeans.cluster_centers_
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
+def CIQ_test_suq2():
+    # 顕著度を何分割化し(高顕著度であれば小さく分割し，低顕著度であれば大きく分割する)，
+    # 各分割に属する色で，何色かに量子化する
+    pass
+
+
+def CIQ_test_sup3():
+    # 少数色でも顕著度が高ければ保存する
+    # --> R = 0 - 0.1 の画素数をR = 0.4 - 0.5の画素数ほどに増加させる
+    M = 16
+    R = 0.5
+    DIR = 'sumple_img'
+    SAVE = 'KMeans_Sup1_R{:.2g}'.format(R)
+
+    def ciq(img):
+        extract = get_saliency_upper_th(img, R)
+        partition = int(len(extract) / (R * 10)) + 1
+        parted_extract = []
+
+        for num in range(0, len(extract), partition):
+            parted_extract.append(extract[num: num + partition])
+
+        S = []
+        l = len(parted_extract)
+        for num in range(len(parted_extract)):
+            n = len(parted_extract[num])
+            th = len(parted_extract[l - 1 - num])
+            count = 0
+            if n <= 0:
+                continue
+            S.extend(extract[num])
+            count += n
+            while count < th:
+                S.extend(extract[num])
+                count += n
+
+        S = np.reshape(np.array(S), newshape=(len(S), img.shape[2]))
+        kmeans, q = KMeans_CIQ(S, M)
+        return kmeans.cluster_centers_
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
 def mapping_pallet_to_img(img, pallete):
     dists = np.empty(shape=(img.shape[0], img.shape[1], len(pallete)))
     for num, pal in enumerate(pallete):
@@ -632,8 +733,10 @@ def mapping_pallet_to_img(img, pallete):
 
 if __name__ == '__main__':
     # CIQ_test_BTPD()
+    CIQ_test_sup1()
+    # CIQ_test_besed_on_SM()
     # CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()
-    CIQ_test_Wu()
+    # CIQ_test_Wu()
     # CIQ_test_SFLA()

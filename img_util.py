@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pySaliencyMap
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def get_surf_point(img):
@@ -84,11 +85,30 @@ def get_saliency_hist(img):
     return hist, bins, saliency_map
 
 
+def get_saliency_upper_th(img, R, partition=False):
+    hist, bins, sm = get_saliency_hist(img)
+    th = int(R * np.sum(hist))
+    count = 0
+    extract = []
+    for num, bin in zip(hist[::-1], bins[::-1]):
+        indices = np.where(sm == int(bin))
+        pixels = img[indices]
+        if partition:
+            extract.append(pixels)
+        else:
+            extract.extend(pixels)
+
+        count += num
+        if count >= th:
+            break
+    return np.array(extract)
+
+
 def test_saliency_map():
     DIR = 'sumple_org'
     SAVE = 'FineGrained'
     imgs = os.listdir(DIR)
-    R = 0.2
+    R = 0.7
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -117,7 +137,7 @@ def test_saliency_map():
 
         # histgramの上位R%に属する画素のみ表示
         hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
-        save_pickup = os.path.join(SAVE, 'pickup_' + img_path)
+        save_pickup = os.path.join(SAVE, 'pickup_R{:.2}'.format(R) + img_path)
         th = int(R * len(liner_sm))
         assert len(liner_sm) == np.sum(hist), "liner_sum: {}, hist: {}".format(len(liner_sm), np.sum(hist))
         count = 0
@@ -131,6 +151,38 @@ def test_saliency_map():
         cv2.imwrite(save_pickup, pickup_sm)
 
         print('extract saliency map of img {} by use of {}'.format(save_path, SAVE))
+
+
+def test_sum_saluency():
+    DIR = 'sumple_org'
+    SAVE = 'FineGrained'
+    imgs = os.listdir(DIR)
+    R = 0.25
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs):
+        path = os.path.join(DIR, img_path)
+        img = cv2.imread(path)
+
+        # saliency mapの保存
+        saliency_map = get_FineGrained(img)
+
+        # 各色のヒストグラム
+        pix_vec = get_saliency_upper_th(img, R)
+
+        hist = np.zeros(shape=(256, 256, 256))
+        for pix in pix_vec:
+            hist[pix] += 1
+        print(hist)
+
+        # pix_vec = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 3))
+        colors = pd.DataFrame(pix_vec)
+        count = colors.duplicated().value_counts()
+        for color in colors:
+            hist[color] = len(np.where(pix_vec == color))
+        print('test')
 
 
 def test_featureextraction():
@@ -152,4 +204,5 @@ def test_featureextraction():
 
 if __name__ == '__main__':
     # bmp2jpg()
+    # test_sum_saluency()
     test_saliency_map()

@@ -52,7 +52,8 @@ def get_RARE_map(img):
 def get_FineGrained(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
-    return saliencyMap
+    # versionによって255倍する必要あり
+    return (saliencyMap * 255.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -94,7 +95,7 @@ def get_saliency_upper_th(img, R):
     for num, bin in zip(hist[::-1], bins[::-1]):
         indices = np.where(sm == int(bin))
         pixels = img[indices]
-        extract_partition
+        extract_partition.append(pixels)
         extract.extend(pixels)
 
         count += num
@@ -103,11 +104,37 @@ def get_saliency_upper_th(img, R):
     return np.array(extract), np.array(extract_partition)
 
 
+def make_colormap(colors, width=256):
+    limit = int(np.sqrt(width))
+
+    # 各色の幅の決定
+    for n in range(limit):
+        if len(colors) <= n ** 2:
+            color_width = int(width / n)
+            break
+
+    # カラーマップの生成
+    color_map = np.zeros(shape=(width, width, 3))
+    i, j = 0, 0
+    for color in colors:
+        x = int(i * color_width)
+        y = int(j * color_width)
+        color_map[y: y + color_width, x: x + color_width] = color
+
+        if i >= width / color_width - 1:
+            i = 0
+            j += 1
+        else:
+            i += 1
+
+    return color_map
+
+
 def test_saliency_map():
-    DIR = 'sumple_org'
+    DIR = 'sumple_img'
     SAVE = 'FineGrained'
     imgs = os.listdir(DIR)
-    R = 0.7
+    R = 0.4
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -153,7 +180,7 @@ def test_saliency_map():
 
 
 def test_sum_saluency():
-    DIR = 'sumple_org'
+    DIR = 'sumple_img'
     SAVE = 'FineGrained'
     imgs = os.listdir(DIR)
     R = 0.25
@@ -184,10 +211,11 @@ def test_sum_saluency():
         print('test')
 
 
-def test_featureextraction():
+def test_smextraction():
     DIR = 'sumple_img'
-    SAVE = 'AKAZE_POINTS'
+    SAVE = 'SM_map'
     imgs = os.listdir(DIR)
+    SELECT = 2048 * 2
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -195,13 +223,58 @@ def test_featureextraction():
     for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         img = cv2.imread(path)
-        img2 = draw_akazepoints(img)
-        save_path = os.path.join(SAVE, img_path)
-        cv2.imwrite(save_path, img2)
+        extract, _ = get_saliency_upper_th(img, 1)
+        extract = pd.DataFrame(extract)
+        # 顕著度TOP256色を表示
+        top = extract[:SELECT]
+        color_map = make_colormap(top, width=SELECT * 4)
+        save_path = os.path.join(SAVE, 'TOP{}_'.format(SELECT) + img_path)
+        cv2.imwrite(save_path, color_map)
+        print('save {}'.format(save_path))
+
+
+def test_sm_variance():
+    DIR = 'sumple_img'
+    SAVE = 'SM_map'
+    imgs = os.listdir(DIR)
+    PARTITION = 5
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs):
+        path = os.path.join(DIR, img_path)
+        img = cv2.imread(path)
+        hist, bins, sm = get_saliency_hist(img)
+
+        count = 0
+        extract = []
+        vars = []
+        for bin in bins[::-PARTITION]:
+            parted_extract = []
+            for num in bin:
+                indices = np.where(sm == int(bin))
+                pixels = img[indices]
+                parted_extract.extend(pixels)
+
+            parted_extract = np.array(parted_extract)
+            var = parted_extract
+            vars.append
+            count += num
+            if count >= th:
+                break
+
+        extract = pd.DataFrame(extract)
+        # 顕著度TOP256色を表示
+        top = extract[:SELECT]
+        color_map = make_colormap(top, width=SELECT * 4)
+        save_path = os.path.join(SAVE, 'TOP{}_'.format(SELECT) + img_path)
+        cv2.imwrite(save_path, color_map)
         print('save {}'.format(save_path))
 
 
 if __name__ == '__main__':
     # bmp2jpg()
     # test_sum_saluency()
-    test_saliency_map()
+    test_smextraction()
+    # test_saliency_map()

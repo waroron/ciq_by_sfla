@@ -7,7 +7,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_mse, compare_psnr
-from img_util import get_saliency_upper_th
+from img_util import get_saliency_upper_th, make_colormap
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -528,6 +528,11 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         # mapped = mapping_pallet_to_img(img, q)
         cv2.imwrite(save_path, mapped)
 
+        # save color map
+        save_path = os.path.join(SAVE, 'map_' + img_path)
+        color_map = make_colormap(palette)
+        cv2.imwrite(save_path, color_map)
+
 
 def CIQ_test_BTPD():
     DIR = 'sumple_img'
@@ -579,7 +584,7 @@ def CIQ_test_Wu():
 
 
 def CIQ_test_KMeans():
-    DIR = 'sumple_org'
+    DIR = 'sumple_img'
     SAVE = 'KMeans'
     M = 16
 
@@ -620,16 +625,17 @@ def CIQ_test_SFLA():
 
 
 def CIQ_test_besed_on_SM():
-    DIR = 'sumple_org'
-    SAVE = 'KMeans_SMbased'
     M = 16
     R = 0.5
+    DIR = 'sumple_img'
+    SAVE = 'KMeans_SMbased_R{:.2g}'.format(R)
 
     def ciq(img):
-        extract = get_saliency_upper_th(img, R)
+        extract, _ = get_saliency_upper_th(img, R)
         S = np.reshape(extract, newshape=(len(extract), img.shape[2]))
         kmeans, q = KMeans_CIQ(S, M)
-        return kmeans.cluster_centers_
+        q = kmeans.cluster_centers_
+        return q
 
     CIQ_test(ciq, SAVE, DIR)
 
@@ -659,7 +665,7 @@ def CIQ_test_sup1():
         indices = np.argmax(hist)
 
 
-        kmeans, _ = KMeans_CIQ(extract, M)
+        kmeans, _ = BTPD(extract, M)
         return kmeans.cluster_centers_
 
     CIQ_test(ciq, SAVE, DIR)
@@ -722,8 +728,8 @@ def mapping_pallet_to_img(img, pallete):
 
 if __name__ == '__main__':
     # CIQ_test_BTPD()
-    CIQ_test_sup1()
-    # CIQ_test_besed_on_SM()
+    # CIQ_test_sup1()
+    CIQ_test_besed_on_SM()
     # CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()

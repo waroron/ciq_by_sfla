@@ -85,23 +85,22 @@ def get_saliency_hist(img):
     return hist, bins, saliency_map
 
 
-def get_saliency_upper_th(img, R, partition=False):
+def get_saliency_upper_th(img, R):
     hist, bins, sm = get_saliency_hist(img)
     th = int(R * np.sum(hist))
     count = 0
     extract = []
+    extract_partition = []
     for num, bin in zip(hist[::-1], bins[::-1]):
         indices = np.where(sm == int(bin))
         pixels = img[indices]
-        if partition:
-            extract.append(pixels)
-        else:
-            extract.extend(pixels)
+        extract_partition
+        extract.extend(pixels)
 
         count += num
         if count >= th:
             break
-    return np.array(extract)
+    return np.array(extract), np.array(extract_partition)
 
 
 def test_saliency_map():

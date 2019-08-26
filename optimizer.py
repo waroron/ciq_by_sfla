@@ -638,39 +638,28 @@ def CIQ_test_sup1():
     # 少数色でも顕著度が高ければ保存する
     # --> 顕著度ヒストグラムが一様になるように高顕著度の色を増やしてCIQ
     M = 16
-    R = 0.25
+    R = 0.05
     P = 10
     DIR = 'sumple_img'
     SAVE = 'KMeans_Sup1_R{:.2g}'.format(R)
 
+    alpha = 0
+    beta = 0
+    def get_priority(sv, n):
+            return alpha * sv + beta * n
+
     def ciq(img):
-        extract = get_saliency_upper_th(img, R, partition=True)
-        partition = int(len(extract) / P)
+        extract, parted_extract = get_saliency_upper_th(img, R)
+        colors = pd.DataFrame(extract).drop_duplicates().values
+        print('{} colors exist'.format(len(colors)))
+        hist = np.zeros(shape=len(colors))
+        for num in range(len(colors)):
+            index = np.where((img == colors[num]).all(axis=2))
+            hist[num] = len(index[0])
+        indices = np.argmax(hist)
 
-        parted_extract = []
-        for num in range(0, len(extract), partition):
-            
-            tmp = extract[num: num + partition + 1]
-            arr = np.reshape(tmp, newshape=(len(tmp), 3))
-            parted_extract.append(arr)
 
-        parted_extract = np.array(parted_extract)
-        S = []
-        l = len(parted_extract)
-        for num in range(l):
-            n = len(parted_extract[num])
-            th = len(parted_extract[l - num - 1])
-            count = 0
-            if n <= 0:
-                continue
-            S.extend(parted_extract[num])
-            count += n
-            while count < th:
-                S.extend(parted_extract[num])
-                count += n
-
-        S = np.reshape(np.array(S), newshape=(len(S), img.shape[2]))
-        kmeans, q = KMeans_CIQ(S, M)
+        kmeans, _ = KMeans_CIQ(extract, M)
         return kmeans.cluster_centers_
 
     CIQ_test(ciq, SAVE, DIR)

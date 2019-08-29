@@ -496,7 +496,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
-    INDICES = ['MSE', 'PSNR', 'Lab_MSE']
+    INDICES = ['img_name', 'MSE', 'PSNR', 'Lab_MSE']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -506,7 +506,12 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         save_path = os.path.join(SAVE, img_path)
         img = cv2.imread(path)
         st = time.time()
-        palette = ciq(img)
+        try:
+            palette = ciq(img)
+        except np.linalg.LinAlgError:
+            print('LinAlgError in {}'.format(img_path))
+            continue
+
         en = time.time()
         mapped = mapping_pallet_to_img(img, palette)
         mapped = np.reshape(mapped, newshape=img.shape)
@@ -516,11 +521,11 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         psnr = compare_psnr(img, mapped)
         lab_mse = compare_labmse(img, mapped)
 
-        df = pd.DataFrame([[mse, psnr, lab_mse]], columns=INDICES)
+        df = pd.DataFrame([[img_path, mse, psnr, lab_mse]], columns=INDICES)
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
 
         if num != 0:
-            pre_csv = pd.read_csv(csv_path)
+            pre_csv = pd.read_csv(csv_path, index_col=0)
             df = pre_csv.append(df)
         df.to_csv(csv_path)
 
@@ -640,6 +645,22 @@ def CIQ_test_besed_on_SM():
     CIQ_test(ciq, SAVE, DIR)
 
 
+def CIQ_test_gradually():
+    DIR = 'sumple_img'
+    SAVE = 'BTPD_256_128_16'
+    M = [256, 128, 16]
+
+    def ciq(img):
+        S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, img.shape[2]))
+        for m in M:
+            S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+            q = BTPD(S, m)
+            S = q
+        return q
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
 def CIQ_test_sup1():
     # 少数色でも顕著度が高ければ保存する
     # --> 顕著度ヒストグラムが一様になるように高顕著度の色を増やしてCIQ
@@ -727,9 +748,10 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
+    CIQ_test_gradually()
     # CIQ_test_BTPD()
     # CIQ_test_sup1()
-    CIQ_test_besed_on_SM()
+    # CIQ_test_besed_on_SM()
     # CIQ_test_KMeans()
     # CIQ_test_PSO()
     # OneMaxBySFLA()

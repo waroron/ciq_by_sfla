@@ -53,7 +53,7 @@ def get_FineGrained(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 255.0).astype(np.uint8)
+    return (saliencyMap * 1.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -132,9 +132,10 @@ def make_colormap(colors, width=256):
 
 def test_saliency_map():
     DIR = 'sumple_img'
-    SAVE = 'FineGrained'
+    SAVE = 'SM_map'
     imgs = os.listdir(DIR)
-    R = 0.4
+    R = np.arange(1.0, 0, -0.1)
+    PART = 8
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -142,12 +143,35 @@ def test_saliency_map():
     for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         img = cv2.imread(path)
-        pickup_sm = np.zeros(shape=img.shape)
+        root, ext = os.path.splitext(img_path)
+        img_dir = os.path.join(SAVE, root)
 
+        if not os.path.isdir(img_dir):
+            os.mkdir(img_dir)
         # saliency mapの保存
         saliency_map = get_FineGrained(img)
-        save_path = os.path.join(SAVE, img_path)
+        liner_sm = np.reshape(saliency_map, newshape=(img.shape[0] * img.shape[1]))
+        save_path = os.path.join(img_dir, img_path)
         cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
+        print('save saliency map as img {}'.format(save_path))
+
+        for n in range(len(R)):
+            # histgramの上位R%に属する画素のみ表示
+            pickup_sm = np.zeros(shape=img.shape)
+            hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
+            save_pickup = os.path.join(img_dir, 'pickup_R{:.2}'.format(R[n]) + img_path)
+            th = int(R[n] * len(liner_sm))
+            assert len(liner_sm) == np.sum(hist), "liner_sum: {}, hist: {}".format(len(liner_sm), np.sum(hist))
+            count = 0
+            for num, bin in zip(hist[::-1], bins[::-1]):
+                indices = np.where(saliency_map == int(bin))
+                pickup_sm[indices] = img[indices]
+
+                count += num
+                if count >= th:
+                    break
+            cv2.imwrite(save_pickup, pickup_sm)
+            print('extract saliency map of img {} by use of {}'.format(save_pickup, img_dir))
 
         # histgramの保存
         liner_sm = np.reshape(saliency_map, newshape=(img.shape[0] * img.shape[1]))
@@ -155,33 +179,26 @@ def test_saliency_map():
         ax = fig.add_subplot(1, 1, 1)
         ax.hist(liner_sm, bins=256)
         ax.set_title('{} saliency map(FineGrained)'.format(img_path))
-        ax.set_xlabel('luminescence')
+        ax.set_xlabel('saliency')
         ax.set_ylabel('number')
-        root, ext = os.path.splitext(img_path)
-        save_fig = os.path.join(SAVE, 'SM_' + img_path.replace(ext, 'png'))
+        save_fig = os.path.join(img_dir, 'SM_' + img_path.replace(ext, 'png'))
         plt.savefig(save_fig)
+        print('save histogram as img {}'.format(save_fig))
 
-        # histgramの上位R%に属する画素のみ表示
-        hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
-        save_pickup = os.path.join(SAVE, 'pickup_R{:.2}'.format(R) + img_path)
-        th = int(R * len(liner_sm))
-        assert len(liner_sm) == np.sum(hist), "liner_sum: {}, hist: {}".format(len(liner_sm), np.sum(hist))
-        count = 0
-        for num, bin in zip(hist[::-1], bins[::-1]):
-            indices = np.where(saliency_map == int(bin))
-            pickup_sm[indices] = img[indices]
-
-            count += num
-            if count >= th:
-                break
-        cv2.imwrite(save_pickup, pickup_sm)
-
-        print('extract saliency map of img {} by use of {}'.format(save_path, SAVE))
+        # histgramのbinsをPARTずつ区切ってそれぞれの画素を表示
+        for bin in range(0, 256, PART):
+            pickup_sm = np.zeros(shape=img.shape)
+            save_pickup = os.path.join(img_dir, 'pickup_bin{}-bin{}'.format(bin, bin + PART) + img_path)
+            for n in range(bin, bin + PART):
+                indices = np.where(saliency_map == int(n))
+                pickup_sm[indices] = img[indices]
+            cv2.imwrite(save_pickup, pickup_sm)
+            print('save fig {}'.format(save_pickup))
 
 
 def test_sum_saluency():
     DIR = 'sumple_img'
-    SAVE = 'FineGrained'
+    SAVE = 'SM_map'
     imgs = os.listdir(DIR)
     R = 0.25
 
@@ -237,7 +254,7 @@ def test_sm_variance():
     DIR = 'sumple_img'
     SAVE = 'SM_map'
     imgs = os.listdir(DIR)
-    PARTITION = 5
+    PARTITION = 1
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -246,35 +263,44 @@ def test_sm_variance():
         path = os.path.join(DIR, img_path)
         img = cv2.imread(path)
         hist, bins, sm = get_saliency_hist(img)
+        root, ext = os.path.splitext(img_path)
+        img_dir = os.path.join(SAVE, root)
 
-        count = 0
-        extract = []
+        if not os.path.isdir(img_dir):
+            os.mkdir(img_dir)
+
         vars = []
+        xlabel = []
         for bin in bins[::-PARTITION]:
             parted_extract = []
-            for num in bin:
-                indices = np.where(sm == int(bin))
+            for n in range(PARTITION):
+                indices = np.where(sm == int(n + bin))
                 pixels = img[indices]
                 parted_extract.extend(pixels)
 
             parted_extract = np.array(parted_extract)
-            var = parted_extract
-            vars.append
-            count += num
-            if count >= th:
-                break
+            var = parted_extract.var()
+            vars.append(var)
+            xlabel.append(bin)
 
-        extract = pd.DataFrame(extract)
-        # 顕著度TOP256色を表示
-        top = extract[:SELECT]
-        color_map = make_colormap(top, width=SELECT * 4)
-        save_path = os.path.join(SAVE, 'TOP{}_'.format(SELECT) + img_path)
-        cv2.imwrite(save_path, color_map)
-        print('save {}'.format(save_path))
+        # histgramの保存
+        vars = np.array(vars)
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        ax.bar(xlabel, vars)
+        ax.set_title('{} saliency variance(FineGrained)'.format(img_path))
+        ax.set_xlabel('saliency')
+        ax.set_ylabel('variance')
+
+        save_fig = os.path.join(img_dir, 'Var_hist_' + img_path.replace(ext, 'png'))
+        plt.savefig(save_fig)
+
+        print('save {}'.format(save_fig))
 
 
 if __name__ == '__main__':
     # bmp2jpg()
     # test_sum_saluency()
-    test_smextraction()
-    # test_saliency_map()
+    # test_smextraction()
+    test_saliency_map()
+    test_sm_variance()

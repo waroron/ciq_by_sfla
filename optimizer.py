@@ -7,7 +7,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_nrmse, compare_psnr
-from img_util import get_saliency_upper_th, make_colormap
+from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -71,6 +71,8 @@ def BTPD(S, M):
     q = []
 
     def get_R(c):
+        # 要するに，分散共分散行列を算出するためのものE(XiXj)だと思われるので，
+        # 論文のまま記述すると，総数で割られてないのでおかしい
         sum = (c[0] * c[0].T).copy()
         for s in c[1:]:
             tmp = s * s.T
@@ -78,22 +80,27 @@ def BTPD(S, M):
         return sum
 
     def get_m(c):
-        sum = c[0].copy()
-        for s in c[1:]:
-            sum += s
+        sum = np.sum(c, axis=0)
+        # sum = c[0].copy()
+        # for s in c[1:]:
+        #     sum += s
         return sum
 
     def get_N(c):
         return len(c)
 
+    if len(S.shape) != 3:
+        S = np.reshape(S, newshape=(len(S), 1, 3))
+
     C.append(S)
-    R.append(get_R(C[0]))
     m.append(get_m(C[0]))
     N.append(get_N(C[0]))
+    R.append(get_R(C[0]) / N[0])
     q.append(m[0] / N[0])
 
     for num in range(M - 1):
-        R_ = R[num] - (np.dot(m[num], m[num].T) / N[num])
+        tmp =(m[num] * m[num].T) / N[num]
+        R_ = R[num] - tmp
         W, v = np.linalg.eig(R_)
         e = v[np.argmax(W)]
 
@@ -119,14 +126,14 @@ def BTPD(S, M):
         C.append(c_2n)
         C.append(c_2n1)
 
-        R.append(get_R(c_2n))
-        m.append(get_m(c_2n))
         N.append(get_N(c_2n))
+        R.append(get_R(c_2n) / N[-1])
+        m.append(get_m(c_2n))
         q.append(m[-1] / N[-1])
 
+        N.append(N[num] - N[-1])
         R.append(R[num] - R[-1])
         m.append(m[num] - m[-1])
-        N.append(N[num] - N[-1])
         q.append(m[-1] / N[-1])
 
     color_palette = np.round(q[len(q) - M:])
@@ -706,10 +713,44 @@ def CIQ_test_sup1():
     CIQ_test(ciq, SAVE, DIR)
 
 
-def CIQ_test_suq2():
+def CIQ_test_sup2():
     # 顕著度を何分割化し(高顕著度であれば小さく分割し，低顕著度であれば大きく分割する)，
     # 各分割に属する色で，何色かに量子化する
-    pass
+    M = 16
+    DIR = 'sumple_img'
+    SAVE = 'sup2'
+
+    def ciq(img):
+        hist, bins, sm = get_saliency_hist(img)
+
+        # 顕著度の中央値で2つに分割する
+        med = np.median(sm)
+        upper_indices = np.where(sm >= med)
+        lower_indices = np.where(sm < med)
+
+        upper_pix = img[upper_indices]
+        lower_pix = img[lower_indices]
+
+        var1 = np.mean(np.var(upper_pix, axis=0))
+        var2 = np.mean(np.var(lower_pix, axis=0))
+
+        # sumple_ratio = int(M * 32)
+        # ratio1 = int(var1 * sumple_ratio / (var1 + var2))
+        # ratio2 = int(var2 * sumple_ratio / (var1 + var2))
+        ratio1 = 256
+        ratio2 = 1024
+
+        q1 = BTPD(upper_pix, ratio1)
+        print('q1 quantized into {} colors'.format(ratio1))
+        q2 = BTPD(lower_pix, ratio2)
+        print('q2 quantized into {} colors'.format(ratio2))
+
+        q = np.array([q1, q2])
+
+        q = BTPD(q, M)
+        return q
+
+    CIQ_test(ciq, SAVE, DIR)
 
 
 def CIQ_test_sup3():
@@ -762,7 +803,8 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
-    CIQ_test_gradually()
+    CIQ_test_sup2()
+    # CIQ_test_gradually()
     # CIQ_test_BTPD()
     # CIQ_test_sup1()
     # CIQ_test_besed_on_SM()

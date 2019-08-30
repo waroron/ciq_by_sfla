@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
-from skimage.measure import compare_mse, compare_psnr
+from skimage.measure import compare_nrmse, compare_psnr
 from img_util import get_saliency_upper_th, make_colormap
 
 
@@ -105,8 +105,9 @@ def BTPD(S, M):
         num_c2n1 = len(c_2n1_index[0])
 
         if num_c2n <= 0 or num_c2n1 <= 0:
-            print("the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1))
-            print('var: {}'.format(np.var(C[num][:, 0, :])))
+            raise ValueError("The target image doesn't have many colors")
+            # print("the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1))
+            # print('var: {}'.format(np.var(C[num], axis=0)))
             # for n, c in enumerate(C):
             #     print('{} th C: len {}'.format(n + 1, len(c)))
             # print('len compare: {}'.format(len(compare)))
@@ -497,14 +498,14 @@ def compare_labmse(img1, img2):
     img1_lab = cv2.cvtColor(img1, cv2.COLOR_BGR2Lab)
     img2_lab = cv2.cvtColor(img2, cv2.COLOR_BGR2Lab)
 
-    return compare_mse(img1_lab, img2_lab)
+    return compare_nrmse(img1_lab, img2_lab)
 
 
 def CIQ_test(ciq, test_name, test_img='sumple_img'):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
-    INDICES = ['img_name', 'MSE', 'PSNR', 'Lab_MSE']
+    INDICES = ['img_name', 'NRMSE', 'PSNR', 'Lab_NRMSE']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -519,17 +520,21 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         except np.linalg.LinAlgError:
             print('LinAlgError in {}'.format(img_path))
             continue
+        except ValueError as me:
+            print(me)
+            print('Error in : {}'.format(img_path))
+            continue
 
         en = time.time()
         mapped = mapping_pallet_to_img(img, palette)
         mapped = np.reshape(mapped, newshape=img.shape)
 
         # eval
-        mse = compare_mse(img, mapped)
+        nrmse = compare_nrmse(img, mapped)
         psnr = compare_psnr(img, mapped)
-        lab_mse = compare_labmse(img, mapped)
+        lab_nrmse = compare_labmse(img, mapped)
 
-        df = pd.DataFrame([[img_path, mse, psnr, lab_mse]], columns=INDICES)
+        df = pd.DataFrame([[img_path, nrmse, psnr, lab_nrmse]], columns=INDICES)
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
 
         if num != 0:
@@ -655,8 +660,8 @@ def CIQ_test_besed_on_SM():
 
 def CIQ_test_gradually():
     DIR = 'sumple_img'
-    SAVE = 'BTPD_1024_256_16'
-    M = [1024, 128, 16]
+    SAVE = 'BTPD_1024_16'
+    M = [1024, 16]
 
     def ciq(img):
         S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, img.shape[2]))

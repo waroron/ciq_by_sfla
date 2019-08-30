@@ -53,7 +53,7 @@ def get_FineGrained(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 1.0).astype(np.uint8)
+    return (saliencyMap * 255.0).astype(np.uint8)
 
 
 def get_saliency_map(img):

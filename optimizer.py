@@ -93,7 +93,7 @@ def BTPD(S, M):
     q.append(m[0] / N[0])
 
     for num in range(M - 1):
-        R_ = R[num] - (m[num] * m[num].T) / N[num]
+        R_ = R[num] - (np.dot(m[num], m[num].T) / N[num])
         W, v = np.linalg.eig(R_)
         e = v[np.argmax(W)]
 
@@ -103,6 +103,14 @@ def BTPD(S, M):
         c_2n1_index = np.where(compare > criteria)
         num_c2n = len(c_2n_index[0])
         num_c2n1 = len(c_2n1_index[0])
+
+        if num_c2n <= 0 or num_c2n1 <= 0:
+            print("the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1))
+            print('var: {}'.format(np.var(C[num][:, 0, :])))
+            # for n, c in enumerate(C):
+            #     print('{} th C: len {}'.format(n + 1, len(c)))
+            # print('len compare: {}'.format(len(compare)))
+        # assert num_c2n > 0 and num_c2n1 > 0, "the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1)
 
         c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
         c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
@@ -647,13 +655,14 @@ def CIQ_test_besed_on_SM():
 
 def CIQ_test_gradually():
     DIR = 'sumple_img'
-    SAVE = 'BTPD_256_128_16'
-    M = [256, 128, 16]
+    SAVE = 'BTPD_1024_256_16'
+    M = [1024, 128, 16]
 
     def ciq(img):
         S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, img.shape[2]))
         for m in M:
             S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+            print('len S: {}'.format(len(S)))
             q = BTPD(S, m)
             S = q
         return q

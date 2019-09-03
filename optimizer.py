@@ -466,22 +466,18 @@ def CIQ_test_gradually():
     CIQ_test(ciq, SAVE, DIR)
 
 
-def CIQ_test_sup1():
-    # 少数色でも顕著度が高ければ保存する
-    # --> 顕著度ヒストグラムが一様になるように高顕著度の色を増やしてCIQ
-    M = 16
-    R = 0.5
-    DIR = 'sumple_img'
-    SAVE = 'BTPD_R{:.2g}'.format(R)
-
-    def ciq(img):
-        extract, parted_extract, zeros = get_saliency_upper_th(img, R, sm='SR')
-        # cv2.imshow('test', zeros)
-        # cv2.waitKey(0)
-        q = BTPD(extract, M)
-        return q
-
-    CIQ_test(ciq, SAVE, DIR)
+def CIQ_test_sup1(M=[16, 32], DIR=['sumple_img'], R=[0,1]):
+    for dir in DIR:
+        for m in M:
+            for r in R:
+                def ciq(img):
+                    extract, parted_extract, zeros = get_saliency_upper_th(img, r, sm='SR')
+                    # cv2.imshow('test', zeros)
+                    # cv2.waitKey(0)
+                    q = BTPD(extract, m)
+                    return q
+                SAVE = 'sup1_M{}_R{}_{}'.format(m, r, dir)
+                CIQ_test(ciq, SAVE, test_img=dir)
 
 
 def CIQ_test_sup2():
@@ -620,11 +616,11 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
-    # CIQ_test_sup1()
+    CIQ_test_sup1(M=[16, 32], R=[0.1, 0.3, 0.5])
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])
-    CIQ_test_SMBW(M=[16, 32], DIR=['sumple_img', 'misc'], M0=[0.5, 0.7, 0.8, 0.9])
+    # CIQ_test_SMBW(M=[16, 32], DIR=['sumple_img', 'misc'], M0=[0.5, 0.7, 0.8, 0.9])
     # CIQ_test_sup1()
     # CIQ_test_besed_on_SM()
     # CIQ_test_KMeans()

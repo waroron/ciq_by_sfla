@@ -7,7 +7,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_nrmse, compare_psnr
-from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist
+from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors
+from btpd import BTPD, SMBW_BTPD
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -61,220 +62,6 @@ def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
                 shuffled_fitness[mem_worst_index + index_bius] = next_x_worst_fit
 
     return shuffled_frogs[global_best_index], hist_bestfrogs, hist_frogs
-
-
-def BTPD(S, M):
-    C = []
-    R = []
-    m = []
-    N = []
-    q = []
-
-    def get_R(c):
-        # 要するに，分散共分散行列を算出するためのものE(XiXj)だと思われるので，
-        # 論文のまま記述すると，総数で割られてないのでおかしい
-        sum = (c[0] * c[0].T).copy()
-        for s in c[1:]:
-            tmp = s * s.T
-            sum += tmp
-        return sum
-
-    def get_m(c):
-        sum = np.sum(c, axis=0)
-        # sum = c[0].copy()
-        # for s in c[1:]:
-        #     sum += s
-        return sum
-
-    def get_N(c):
-        return len(c)
-
-    if len(S.shape) != 3:
-        S = np.reshape(S, newshape=(len(S), 1, 3))
-
-    C.append(S)
-    m.append(get_m(C[0]))
-    N.append(get_N(C[0]))
-    R.append(get_R(C[0]) / N[0])
-    q.append(m[0] / N[0])
-
-    for num in range(M - 1):
-        tmp =(m[num] * m[num].T) / N[num]
-        R_ = R[num] - tmp
-        W, v = np.linalg.eig(R_)
-        e = v[np.argmax(W)]
-
-        criteria = np.dot(e, q[num][0])
-        compare = np.dot(e, C[num][:, 0, :].T)
-        c_2n_index = np.where(compare <= criteria)
-        c_2n1_index = np.where(compare > criteria)
-        num_c2n = len(c_2n_index[0])
-        num_c2n1 = len(c_2n1_index[0])
-
-        if num_c2n <= 0 or num_c2n1 <= 0:
-            raise ValueError("The target image doesn't have many colors")
-            # print("the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1))
-            # print('var: {}'.format(np.var(C[num], axis=0)))
-            # for n, c in enumerate(C):
-            #     print('{} th C: len {}'.format(n + 1, len(c)))
-            # print('len compare: {}'.format(len(compare)))
-        # assert num_c2n > 0 and num_c2n1 > 0, "the class should be divided into 2 classes, num: {}: len1: {}, len2: {}".format(num, num_c2n, num_c2n1)
-
-        c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
-
-        C.append(c_2n)
-        C.append(c_2n1)
-
-        N.append(get_N(c_2n))
-        R.append(get_R(c_2n) / N[-1])
-        m.append(get_m(c_2n))
-        q.append(m[-1] / N[-1])
-
-        N.append(N[num] - N[-1])
-        R.append(R[num] - R[-1])
-        m.append(m[num] - m[-1])
-        q.append(m[-1] / N[-1])
-
-    color_palette = np.round(q[len(q) - M:])
-
-    return color_palette
-
-
-def BTPD_WTSE(S, M, h):
-    C = []
-    R = []
-    m = []
-    N = []
-    q = []
-    W = []
-
-    y_weight = np.array([0.300, 0.586, 0.115])  # RGBの順番
-    y = y_weight * S
-
-    for _y in y:
-        w_s = np.power(1.0 / (h * (np.min(np.linalg.norm(_y, ord=2), 16) + 2.0)), 2.0)
-        W.append(w_s)
-
-    def get_R(c):
-        sum = (W[0] * c[0] * c[0].T).copy()
-        for w, s in zip(W[1:], c[1:]):
-            tmp = w * s * s.T
-            sum += tmp
-        return sum
-
-    def get_m(c):
-        sum = W[0] * c[0].copy()
-        for w, s in zip(W[1:], c[1:]):
-            sum += w * s
-        return sum
-
-    def get_N():
-        sum = W[0].copy()
-        for w in W[1:]:
-            sum += w
-        return sum
-
-
-    C.append(S)
-    R.append(get_R(C[0]))
-    m.append(get_m(C[0]))
-    N.append(get_N())
-    q.append(m[0] / N[0])
-
-    for num in range(M - 1):
-        R_ = R[num] - (m[num] * m[num].T) / N[num]
-        W, v = np.linalg.eig(R_)
-        e = v[np.argmax(W)]
-
-        criteria = np.dot(e, q[num][0])
-        compare = np.dot(e, C[num][:, 0, :].T)
-        c_2n_index = np.where(compare <= criteria)
-        c_2n1_index = np.where(compare > criteria)
-        num_c2n = len(c_2n_index[0])
-        num_c2n1 = len(c_2n1_index[0])
-
-        c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
-
-        C.append(c_2n)
-        C.append(c_2n1)
-
-        R.append(get_R(c_2n))
-        m.append(get_m(c_2n))
-        N.append(get_N(c_2n))
-        q.append(m[-1] / N[-1])
-
-        R.append(R[num] - R[-1])
-        m.append(m[num] - m[-1])
-        N.append(N[num] - N[-1])
-        q.append(m[-1] / N[-1])
-
-    color_palette = np.round(q[len(q) - M:])
-    return color_palette
-
-
-def EBW_CIQ(S, M):
-    C = []
-    R = []
-    m = []
-    N = []
-    q = []
-    M_0 = 0
-
-    def get_R(c):
-        sum = (c[0] * c[0].T).copy()
-        for s in c[1:]:
-            tmp = s * s.T
-            sum += tmp
-        return sum
-
-    def get_m(c):
-        sum = c[0].copy()
-        for s in c[1:]:
-            sum += s
-        return sum
-
-    def get_N(c):
-        return len(c)
-
-
-    C.append(S)
-    R.append(get_R(C[0]))
-    m.append(get_m(C[0]))
-    N.append(get_N(C[0]))
-    q.append(m[0] / N[0])
-
-    for num in range(M - 1):
-        R_ = R[num] - (m[num] * m[num].T) / N[num]
-        W, v = np.linalg.eig(R_)
-        e = v[np.argmax(W)]
-
-        criteria = np.dot(e, q[num][0])
-        compare = np.dot(e, C[num][:, 0, :].T)
-        c_2n_index = np.where(compare <= criteria)
-        c_2n1_index = np.where(compare > criteria)
-        num_c2n = len(c_2n_index[0])
-        num_c2n1 = len(c_2n1_index[0])
-
-        c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
-
-        C.append(c_2n)
-        C.append(c_2n1)
-
-        R.append(get_R(c_2n))
-        m.append(get_m(c_2n))
-        N.append(get_N(c_2n))
-        q.append(m[-1] / N[-1])
-
-        R.append(R[num] - R[-1])
-        m.append(m[num] - m[-1])
-        N.append(N[num] - N[-1])
-        q.append(m[-1] / N[-1])
-
-    color_palette = np.round(q[len(q) - M:])
-    return color_palette
 
 
 def Wu_method(S, K):
@@ -512,7 +299,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
-    INDICES = ['img_name', 'NRMSE', 'PSNR', 'Lab_NRMSE']
+    INDICES = ['img_name', 'NRMSE', 'PSNR', 'Lab_NRMSE', 'Running time']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -527,10 +314,10 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         except np.linalg.LinAlgError:
             print('LinAlgError in {}'.format(img_path))
             continue
-        except ValueError as me:
-            print(me)
-            print('Error in : {}'.format(img_path))
-            continue
+        # except ValueError as me:
+        #     print(me)
+        #     print('Error in : {}'.format(img_path))
+        #     continue
 
         en = time.time()
         mapped = mapping_pallet_to_img(img, palette)
@@ -541,7 +328,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         psnr = compare_psnr(img, mapped)
         lab_nrmse = compare_labmse(img, mapped)
 
-        df = pd.DataFrame([[img_path, nrmse, psnr, lab_nrmse]], columns=INDICES)
+        df = pd.DataFrame([[img_path, nrmse, psnr, lab_nrmse, en - st]], columns=INDICES)
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
 
         if num != 0:
@@ -559,16 +346,15 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         cv2.imwrite(save_path, color_map)
 
 
-def CIQ_test_BTPD():
-    DIR = 'sumple_img'
-    SAVE = 'BTPD'
-    M = 16
+def CIQ_test_BTPD(M=[16], DIR='sumple_img'):
+    for dir in DIR:
+        for m in M:
+            def ciq(img):
+                q = BTPD_CIQ(img, m)
+                return q
 
-    def ciq(img):
-        q = BTPD_CIQ(img, M)
-        return q
-
-    CIQ_test(ciq, SAVE)
+            SAVE = 'BTPD_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir)
 
 
 def CIQ_test_PSO():
@@ -621,32 +407,30 @@ def CIQ_test_KMeans():
     CIQ_test(ciq, SAVE, DIR)
 
 
-def CIQ_test_SFLA():
-    K = 16
+def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
+    for dir in DIR:
+        for m in M:
+            def ciq(img):
+                def create_color_palette():
+                    return np.random.randint(0, 256, size=(m, 3))
 
-    def create_color_palette():
-        return np.random.randint(0, 256, size=(K, 3))
+                def psnr(frog):
+                    mapped = mapping_pallet_to_img(img, frog)
+                    psnr = compare_psnr(img, mapped)
+                    return psnr
 
-    DIR = 'sumple_img'
-    SAVE = 'SFLA_LabPSNR'
+                def Lab_psnr(frog):
+                    mapped = mapping_pallet_to_img(img, frog)
+                    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+                    mapped_lab = cv2.cvtColor(mapped, cv2.COLOR_BGR2Lab)
+                    psnr = compare_psnr(img_lab, mapped_lab)
+                    return psnr
 
-    def ciq(img):
-        def psnr(frog):
-            mapped = mapping_pallet_to_img(img, frog)
-            psnr = compare_psnr(img, mapped)
-            return psnr
+                frog, _, __ = SFLA(Lab_psnr, create_color_palette)
+                return frog
 
-        def Lab_psnr(frog):
-            mapped = mapping_pallet_to_img(img, frog)
-            img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-            mapped_lab = cv2.cvtColor(mapped, cv2.COLOR_BGR2Lab)
-            psnr = compare_psnr(img_lab, mapped_lab)
-            return psnr
-
-        frog, _, __ = SFLA(Lab_psnr, create_color_palette)
-        return frog
-
-    CIQ_test(ciq, SAVE, DIR)
+            SAVE = 'SFLA_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir)
 
 
 def CIQ_test_besed_on_SM():
@@ -667,8 +451,8 @@ def CIQ_test_besed_on_SM():
 
 def CIQ_test_gradually():
     DIR = 'sumple_img'
-    SAVE = 'BTPD_1024_16'
-    M = [1024, 16]
+    SAVE = 'BTPD_256_16'
+    M = [256, 16]
 
     def ciq(img):
         S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, img.shape[2]))
@@ -686,29 +470,16 @@ def CIQ_test_sup1():
     # 少数色でも顕著度が高ければ保存する
     # --> 顕著度ヒストグラムが一様になるように高顕著度の色を増やしてCIQ
     M = 16
-    R = 0.05
-    P = 10
+    R = 0.5
     DIR = 'sumple_img'
-    SAVE = 'KMeans_Sup1_R{:.2g}'.format(R)
-
-    alpha = 0
-    beta = 0
-    def get_priority(sv, n):
-            return alpha * sv + beta * n
+    SAVE = 'BTPD_R{:.2g}'.format(R)
 
     def ciq(img):
-        extract, parted_extract = get_saliency_upper_th(img, R)
-        colors = pd.DataFrame(extract).drop_duplicates().values
-        print('{} colors exist'.format(len(colors)))
-        hist = np.zeros(shape=len(colors))
-        for num in range(len(colors)):
-            index = np.where((img == colors[num]).all(axis=2))
-            hist[num] = len(index[0])
-        indices = np.argmax(hist)
-
-
-        kmeans, _ = BTPD(extract, M)
-        return kmeans.cluster_centers_
+        extract, parted_extract, zeros = get_saliency_upper_th(img, R, sm='SR')
+        # cv2.imshow('test', zeros)
+        # cv2.waitKey(0)
+        q = BTPD(extract, M)
+        return q
 
     CIQ_test(ciq, SAVE, DIR)
 
@@ -719,10 +490,12 @@ def CIQ_test_sup2():
     M = 16
     DIR = 'sumple_img'
     SAVE = 'sup2'
+    PARTITION = 2
 
     def ciq(img):
-        hist, bins, sm = get_saliency_hist(img)
-
+        num_colors = get_numcolors(img)
+        R = num_colors * 0.0006
+        hist, bins, sm = get_saliency_hist(img, sm='SR')
         # 顕著度の中央値で2つに分割する
         med = np.median(sm)
         upper_indices = np.where(sm >= med)
@@ -733,19 +506,22 @@ def CIQ_test_sup2():
 
         var1 = np.mean(np.var(upper_pix, axis=0))
         var2 = np.mean(np.var(lower_pix, axis=0))
+        tmp1 = var1 ** 2
+        tmp2 = var2 ** 2
 
-        # sumple_ratio = int(M * 32)
-        # ratio1 = int(var1 * sumple_ratio / (var1 + var2))
-        # ratio2 = int(var2 * sumple_ratio / (var1 + var2))
-        ratio1 = 256
-        ratio2 = 1024
-
+        sumple_ratio = int(M * R)
+        ratio1 = int(tmp1 * sumple_ratio / (tmp1 + tmp2))
+        ratio2 = int(tmp2 * sumple_ratio / (tmp1 + tmp2))
+        # ratio1 = 512
+        # ratio2 = 256
+        print('num colors: {} \t sumple ratio: {}'.format(num_colors, sumple_ratio))
+        print('q1 var{} \t {} colors -- > {} colors'.format(var1, get_numcolors(upper_pix), ratio1))
         q1 = BTPD(upper_pix, ratio1)
-        print('q1 quantized into {} colors'.format(ratio1))
-        q2 = BTPD(lower_pix, ratio2)
-        print('q2 quantized into {} colors'.format(ratio2))
 
-        q = np.array([q1, q2])
+        print('q2 var{} \t {} colors -- > {} colors'.format(var2, get_numcolors(lower_pix), ratio2))
+        q2 = BTPD(lower_pix, ratio2)
+
+        q = np.append(q1, q2, axis=0)
 
         q = BTPD(q, M)
         return q
@@ -757,37 +533,78 @@ def CIQ_test_sup3():
     # 少数色でも顕著度が高ければ保存する
     # --> R = 0 - 0.1 の画素数をR = 0.4 - 0.5の画素数ほどに増加させる
     M = 16
-    R = 0.5
+    R = 16
     DIR = 'sumple_img'
-    SAVE = 'KMeans_Sup1_R{:.2g}'.format(R)
+    SAVE = 'Quantized_based_on_SM_uniformly_BTPD_R{}'.format(R)
 
     def ciq(img):
-        extract = get_saliency_upper_th(img, R)
-        partition = int(len(extract) / (R * 10)) + 1
-        parted_extract = []
+        __, parted_extract = get_saliency_upper_th(img, 1.0)
 
-        for num in range(0, len(extract), partition):
-            parted_extract.append(extract[num: num + partition])
-
-        S = []
-        l = len(parted_extract)
-        for num in range(len(parted_extract)):
-            n = len(parted_extract[num])
-            th = len(parted_extract[l - 1 - num])
-            count = 0
-            if n <= 0:
-                continue
-            S.extend(extract[num])
-            count += n
-            while count < th:
-                S.extend(extract[num])
-                count += n
-
-        S = np.reshape(np.array(S), newshape=(len(S), img.shape[2]))
-        kmeans, q = KMeans_CIQ(S, M)
-        return kmeans.cluster_centers_
+        q = []
+        for num, extract in enumerate(parted_extract):
+            n_colors = get_numcolors(extract)
+            if n_colors > (R * 2):
+                print('{}th prequantized: {} --> {}'.format(num, n_colors, R))
+                S = np.reshape(extract, newshape=(len(extract), img.shape[2]))
+                palette = BTPD(S, R)
+                q.extend(palette)
+            elif n_colors > 0:
+                extract = np.reshape(extract, newshape=(len(extract), 1, 3))
+                q.extend(extract)
+        q = np.array(q)
+        q = BTPD(q, M)
+        return q
 
     CIQ_test(ciq, SAVE, DIR)
+
+
+def CIQ_test_sup4():
+    # 一様乱数を生成し，顕著度に比例して選ばれやすい
+    # のようなルールに従って，画素をサンプリングする
+    M = 16
+    R = 16
+    N_SUMPLE = 1024
+    DIR = 'sumple_img'
+    SAVE = 'Quantized_based_on_SM_uniformly_BTPD_R{}'.format(R)
+
+    def sumpling(S, Sv, num):
+        sumple = []
+        sumpled_num = np.random.randint(0, 256, num)
+
+    def ciq(img):
+        __, parted_extract = get_saliency_upper_th(img, 1.0)
+
+        q = []
+        for num, extract in enumerate(parted_extract):
+            n_colors = get_numcolors(extract)
+            if n_colors > (R * 2):
+                print('{}th prequantized: {} --> {}'.format(num, n_colors, R))
+                S = np.reshape(extract, newshape=(len(extract), img.shape[2]))
+                palette = BTPD(S, R)
+                q.extend(palette)
+            elif n_colors > 0:
+                extract = np.reshape(extract, newshape=(len(extract), 1, 3))
+                q.extend(extract)
+        q = np.array(q)
+        q = BTPD(q, M)
+        return q
+
+    CIQ_test(ciq, SAVE, DIR)
+
+
+def CIQ_test_SMBW(M=[16], DIR=['sumple_img'], M0=[0.8]):
+    for dir in DIR:
+        for m in M:
+            for m0 in M0:
+                def ciq(img):
+                    S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                    _, __, Sv = get_saliency_hist(img, sm='SR')
+                    Sv = np.reshape(Sv, newshape=(len(S), 1))
+                    q = SMBW_BTPD(S, Sv, m, M0=m0)
+                    return q
+
+                SAVE = 'SMBW_bySR_M{}_{}_M0{}'.format(m, dir, m0)
+                CIQ_test(ciq, SAVE, test_img=dir)
 
 
 def mapping_pallet_to_img(img, pallete):
@@ -803,9 +620,11 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
-    CIQ_test_sup2()
+    # CIQ_test_sup1()
+    # CIQ_test_sup2()
     # CIQ_test_gradually()
-    # CIQ_test_BTPD()
+    # CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])
+    CIQ_test_SMBW(M=[16, 32], DIR=['sumple_img', 'misc'], M0=[0.5, 0.7, 0.8, 0.9])
     # CIQ_test_sup1()
     # CIQ_test_besed_on_SM()
     # CIQ_test_KMeans()

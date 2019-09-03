@@ -53,7 +53,14 @@ def get_FineGrained(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 255.0).astype(np.uint8)
+    return (saliencyMap * 1.0).astype(np.uint8)
+
+
+def get_spectralresidual(img):
+    saliency = cv2.saliency.StaticSaliencyFineGrained_create()
+    (success, saliencyMap) = saliency.computeSaliency(img)
+    # versionによって255倍する必要あり
+    return (saliencyMap * 1.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -79,29 +86,34 @@ def bmp2jpg():
         print('save {}'.format(save_path))
 
 
-def get_saliency_hist(img):
-    saliency_map = get_FineGrained(img)
+def get_saliency_hist(img, sm='FineGrained'):
+    if sm == 'FineGrained':
+        saliency_map = get_FineGrained(img)
+    else:
+        saliency_map = get_spectralresidual(img)
     liner_sm = np.reshape(saliency_map, newshape=(img.shape[0] * img.shape[1]))
     hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
     return hist, bins, saliency_map
 
 
-def get_saliency_upper_th(img, R):
-    hist, bins, sm = get_saliency_hist(img)
+def get_saliency_upper_th(img, R, sm='FineGrained'):
+    hist, bins, sm = get_saliency_hist(img, sm=sm)
     th = int(R * np.sum(hist))
     count = 0
     extract = []
     extract_partition = []
+    zeros = np.zeros(shape=img.shape)
     for num, bin in zip(hist[::-1], bins[::-1]):
         indices = np.where(sm == int(bin))
         pixels = img[indices]
+        zeros[indices] = img[indices]
         extract_partition.append(pixels)
         extract.extend(pixels)
 
         count += num
         if count >= th:
             break
-    return np.array(extract), np.array(extract_partition)
+    return np.array(extract), np.array(extract_partition), zeros
 
 
 def make_colormap(colors, width=256):
@@ -130,9 +142,16 @@ def make_colormap(colors, width=256):
     return color_map
 
 
+def get_numcolors(img):
+    if len(img.shape) > 2:
+        img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
+    df = pd.DataFrame(img)
+    return len(df.drop_duplicates().values)
+
+
 def test_saliency_map():
     DIR = 'sumple_img'
-    SAVE = 'SM_map'
+    SAVE = 'SM_map_spectralresidual'
     imgs = os.listdir(DIR)
     R = np.arange(1.0, 0, -0.1)
     PART = 8
@@ -178,7 +197,7 @@ def test_saliency_map():
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         ax.hist(liner_sm, bins=256)
-        ax.set_title('{} saliency map(FineGrained)'.format(img_path))
+        ax.set_title('{} saliency map(spectralresidual)'.format(img_path))
         ax.set_xlabel('saliency')
         ax.set_ylabel('number')
         save_fig = os.path.join(img_dir, 'SM_' + img_path.replace(ext, 'png'))
@@ -210,7 +229,7 @@ def test_sum_saluency():
         img = cv2.imread(path)
 
         # saliency mapの保存
-        saliency_map = get_FineGrained(img)
+        saliency_map = get_spectralresidual(img)
 
         # 各色のヒストグラム
         pix_vec = get_saliency_upper_th(img, R)
@@ -252,7 +271,7 @@ def test_smextraction():
 
 def test_sm_variance():
     DIR = 'sumple_img'
-    SAVE = 'SM_map'
+    SAVE = 'SM_map_spectralresidual'
     imgs = os.listdir(DIR)
     PARTITION = 1
 
@@ -288,7 +307,7 @@ def test_sm_variance():
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         ax.bar(xlabel, vars)
-        ax.set_title('{} saliency variance(FineGrained)'.format(img_path))
+        ax.set_title('{} saliency variance(spectralresidual)'.format(img_path))
         ax.set_xlabel('saliency')
         ax.set_ylabel('variance')
 

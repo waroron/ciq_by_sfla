@@ -394,17 +394,16 @@ def CIQ_test_Wu():
         print('\n\n')
 
 
-def CIQ_test_KMeans():
-    DIR = 'sumple_img'
-    SAVE = 'KMeans'
-    M = 16
+def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
+    for dir in DIR:
+        for m in M:
+            def ciq(img):
+                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
+                kmeans, q = KMeans_CIQ(S, m)
+                return kmeans.cluster_centers_
 
-    def ciq(img):
-        S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
-        kmeans, q = KMeans_CIQ(S, M)
-        return kmeans.cluster_centers_
-
-    CIQ_test(ciq, SAVE, DIR)
+            SAVE = 'KMeans_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, dir)
 
 
 def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
@@ -616,7 +615,7 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
-    CIQ_test_sup1(M=[16, 32], R=[0.1, 0.3, 0.5])
+    # CIQ_test_sup1(M=[16, 32], R=[0.1, 0.3, 0.5])
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])

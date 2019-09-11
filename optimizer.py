@@ -7,8 +7,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_nrmse, compare_psnr
-from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors
-from btpd import BTPD, SMBW_BTPD
+from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors, get_spectralresidual, get_saliency_lower_th
+from btpd import BTPD, SMBW_BTPD, BTPD_WTSE
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -295,7 +295,8 @@ def compare_labmse(img1, img2):
     return compare_nrmse(img1_lab, img2_lab)
 
 
-def CIQ_test(ciq, test_name, test_img='sumple_img'):
+def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.COLOR_BGR2Lab,
+             inverse_code=cv2.COLOR_Lab2BGR):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
@@ -320,7 +321,15 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
         #     continue
 
         en = time.time()
-        mapped = mapping_pallet_to_img(img, palette)
+
+        if trans_flag:
+            luv_img = cv2.cvtColor(img, code)
+            mapped = mapping_pallet_to_img(luv_img, palette)
+            mapped = np.reshape(mapped, newshape=img.shape)
+            mapped = cv2.cvtColor(mapped, inverse_code)
+            # palette = cv2.cvtColor(palette, code)
+        else:
+            mapped = mapping_pallet_to_img(img, palette)
         mapped = np.reshape(mapped, newshape=img.shape)
 
         # eval
@@ -342,19 +351,27 @@ def CIQ_test(ciq, test_name, test_img='sumple_img'):
 
         # save color map
         save_path = os.path.join(SAVE, 'map_' + img_path)
-        color_map = make_colormap(palette)
+        color_map = make_colormap(palette).astype(np.uint8)
+
+        if trans_flag:
+            color_map = cv2.cvtColor(color_map, inverse_code)
+
         cv2.imwrite(save_path, color_map)
 
 
-def CIQ_test_BTPD(M=[16], DIR='sumple_img'):
+def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
     for dir in DIR:
         for m in M:
+            code = cv2.COLOR_BGR2Lab
+            code_inverse = cv2.COLOR_Lab2BGR
+
             def ciq(img):
-                q = BTPD_CIQ(img, m)
+                luv_img = cv2.cvtColor(img, code)
+                q = BTPD_CIQ(luv_img, m)
                 return q
 
-            SAVE = 'BTPD_M{}_{}'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir)
+            SAVE = 'BTPD_M{}_{}_Lab'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse)
 
 
 def CIQ_test_PSO():
@@ -587,6 +604,43 @@ def CIQ_test_sup4():
     CIQ_test(ciq, SAVE, DIR)
 
 
+def CIQ_test_sup5(M=[16, 32], DIR=['sumple_img'], R={0.2, 0.25}):
+    # SMを二値化して量子化する
+    for dir in DIR:
+        for m in M:
+            for r in R:
+                def ciq(img):
+                    upper_extract, _, __ = get_saliency_upper_th(img, r, sm='SR')
+                    lower_extract, _, __ = get_saliency_lower_th(img, r, sm='SR')
+                    q1 = BTPD(upper_extract, m)
+                    q2 = BTPD(lower_extract, m)
+                    q = np.append(q1, q2, axis=0)
+                    q = BTPD(q, m)
+                    return q
+                SAVE = 'sup5_M{}_R{}_{}'.format(m, r, dir)
+                CIQ_test(ciq, SAVE, test_img=dir)
+
+
+def CIQ_test_medianbased(M=[16, 32], DIR=['sumple_img'], R=[0,1]):
+    MODE = 'UPPER'
+    for dir in DIR:
+        for m in M:
+            def ciq(img):
+                hist, bins, sm = get_saliency_hist(img, sm='SR')
+                # 顕著度の中央値で2つに分割する
+                med = np.median(sm)
+                print('Median: {}'.format(med))
+                if MODE == 'UPPER':
+                    indices = np.where(sm >= med)
+                else:
+                    indices = np.where(sm < med)
+                pix = img[indices]
+                q = BTPD(pix, m)
+                return q
+            SAVE = 'medianbased_M{}_{}_{}'.format(m, dir, MODE)
+            CIQ_test(ciq, SAVE, test_img=dir)
+
+
 def CIQ_test_SMBW(M=[16], DIR=['sumple_img'], M0=[0.8]):
     for dir in DIR:
         for m in M:
@@ -602,6 +656,24 @@ def CIQ_test_SMBW(M=[16], DIR=['sumple_img'], M0=[0.8]):
                 CIQ_test(ciq, SAVE, test_img=dir)
 
 
+def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
+    for dir in DIR:
+        for m in M:
+            code = cv2.COLOR_BGR2Lab
+            inverse_code = cv2.COLOR_Lab2BGR
+
+            def ciq(img):
+                luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+                S = np.reshape(luv_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                _, __, Sv = get_saliency_hist(img, sm='SR')
+                # Sv = 1.0 / (np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16) + 1.0)
+                Sv = (255.0 - np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)) / 255.0
+                q = BTPD_WTSE(S, m, Sv)
+                return q
+            SAVE = 'BTPD_withSv_bySR_M{}_{}_Lab2'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code)
+
+
 def mapping_pallet_to_img(img, pallete):
     dists = np.empty(shape=(img.shape[0], img.shape[1], len(pallete)))
     for num, pal in enumerate(pallete):
@@ -615,10 +687,13 @@ def mapping_pallet_to_img(img, pallete):
 
 
 if __name__ == '__main__':
-    # CIQ_test_sup1(M=[16, 32], R=[0.1, 0.3, 0.5])
+    # CIQ_test_medianbased()
+    # CIQ_test_sup5()
+    # CIQ_test_sup1(M=[16, 32], R=[0.2, 0,4])
     # CIQ_test_sup2()
     # CIQ_test_gradually()
-    # CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])
+    CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])
+    CIQ_test_BTPD_withSv(M=[16, 32], DIR=['sumple_img', 'misc'])
     # CIQ_test_SMBW(M=[16, 32], DIR=['sumple_img', 'misc'], M0=[0.5, 0.7, 0.8, 0.9])
     # CIQ_test_sup1()
     # CIQ_test_besed_on_SM()

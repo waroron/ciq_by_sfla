@@ -60,7 +60,7 @@ def get_spectralresidual(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 1.0).astype(np.uint8)
+    return (saliencyMap * 255.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -104,6 +104,26 @@ def get_saliency_upper_th(img, R, sm='FineGrained'):
     extract_partition = []
     zeros = np.zeros(shape=img.shape)
     for num, bin in zip(hist[::-1], bins[::-1]):
+        indices = np.where(sm == int(bin))
+        pixels = img[indices]
+        zeros[indices] = img[indices]
+        extract_partition.append(pixels)
+        extract.extend(pixels)
+
+        count += num
+        if count >= th:
+            break
+    return np.array(extract), np.array(extract_partition), zeros
+
+
+def get_saliency_lower_th(img, R, sm='FineGrained'):
+    hist, bins, sm = get_saliency_hist(img, sm=sm)
+    th = int(R * np.sum(hist))
+    count = 0
+    extract = []
+    extract_partition = []
+    zeros = np.zeros(shape=img.shape)
+    for num, bin in zip(hist[::1], bins[::1]):
         indices = np.where(sm == int(bin))
         pixels = img[indices]
         zeros[indices] = img[indices]
@@ -168,7 +188,7 @@ def test_saliency_map():
         if not os.path.isdir(img_dir):
             os.mkdir(img_dir)
         # saliency mapの保存
-        saliency_map = get_FineGrained(img)
+        saliency_map = get_spectralresidual(img)
         liner_sm = np.reshape(saliency_map, newshape=(img.shape[0] * img.shape[1]))
         save_path = os.path.join(img_dir, img_path)
         cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
@@ -178,11 +198,29 @@ def test_saliency_map():
             # histgramの上位R%に属する画素のみ表示
             pickup_sm = np.zeros(shape=img.shape)
             hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
-            save_pickup = os.path.join(img_dir, 'pickup_R{:.2}'.format(R[n]) + img_path)
+            save_pickup = os.path.join(img_dir, 'pickup_upper{:.2}'.format(R[n]) + img_path)
             th = int(R[n] * len(liner_sm))
             assert len(liner_sm) == np.sum(hist), "liner_sum: {}, hist: {}".format(len(liner_sm), np.sum(hist))
             count = 0
             for num, bin in zip(hist[::-1], bins[::-1]):
+                indices = np.where(saliency_map == int(bin))
+                pickup_sm[indices] = img[indices]
+
+                count += num
+                if count >= th:
+                    break
+            cv2.imwrite(save_pickup, pickup_sm)
+            print('extract saliency map of img {} by use of {}'.format(save_pickup, img_dir))
+
+        for n in range(len(R)):
+            # histgramの上位R%に属する画素のみ表示
+            pickup_sm = np.zeros(shape=img.shape)
+            hist, bins = np.histogram(liner_sm, bins=np.arange(0, 256, 1))
+            save_pickup = os.path.join(img_dir, 'pickup_lower{:.2}'.format(R[n]) + img_path)
+            th = int(R[n] * len(liner_sm))
+            assert len(liner_sm) == np.sum(hist), "liner_sum: {}, hist: {}".format(len(liner_sm), np.sum(hist))
+            count = 0
+            for num, bin in zip(hist[::1], bins[::1]):
                 indices = np.where(saliency_map == int(bin))
                 pickup_sm[indices] = img[indices]
 

@@ -95,12 +95,15 @@ class SubNode(Node):
         self.root = root
 
 
-def get_R(c):
+def get_R(c, Sv=None):
     # 要するに，分散共分散行列を算出するためのものE(XiXj)だと思われるので，
     # 論文のまま記述すると，総数で割られてないのでおかしい
     sum = np.zeros(shape=(3, 3))
-    for s in c:
-        tmp = s * s.T
+    if Sv is None:
+        Sv = np.ones(len(c))
+
+    for s, sv in zip(c, Sv):
+        tmp = sv * s * s.T
         sum += tmp
     return sum
 
@@ -132,6 +135,23 @@ def get_params(S):
     return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev}
 
 
+def get_params_with_saliency(S, Sv):
+    m = 0
+    for s, sv in zip(S, Sv):
+        m += s * sv
+    N = np.sum(Sv)
+    R = get_R(S, Sv)
+    q = m / N
+
+    tmp = (m * m.T) / N
+    R_ = R - tmp
+    W, v = np.linalg.eig(R_)
+    ev = np.max(W)
+    e = v[np.argmax(W)]
+
+    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv}
+
+
 def get_params_for_bst(S1, S2, parent_params):
     right_params = get_params(S1)
     m = parent_params['m'] - right_params['m']
@@ -145,6 +165,22 @@ def get_params_for_bst(S1, S2, parent_params):
     e = v[np.argmax(W)]
     left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev}
     # left_params = get_params(S2)
+    return right_params, left_params
+
+
+def get_params_for_bst_with_saliency(S1, S2, Sv1, Sv2, parent_params):
+    right_params = get_params_with_saliency(S1, Sv1)
+    # m = parent_params['m'] - right_params['m']
+    # N = parent_params['N'] - right_params['N']
+    # R = parent_params['R'] - right_params['R']
+    # q = m / N
+    # tmp = (m * m.T) / N
+    # R_ = R - tmp
+    # W, v = np.linalg.eig(R_)
+    # ev = np.max(W)
+    # e = v[np.argmax(W)]
+    # left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv2}
+    left_params = get_params_with_saliency(S2, Sv2)
     return right_params, left_params
 
 
@@ -202,76 +238,62 @@ def BTPD(S, M):
     return color_palette
 
 
-def BTPD_WTSE(S, M, h):
-    C = []
-    R = []
-    m = []
-    N = []
-    q = []
-    W = []
+def BTPD_WTSE(S, M, Sv):
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16)
 
-    y_weight = np.array([0.300, 0.586, 0.115])  # RGBの順番
-    y = y_weight * S
-
-    for _y in y:
-        w_s = np.power(1.0 / (h * (np.min(np.linalg.norm(_y, ord=2), 16) + 2.0)), 2.0)
-        W.append(w_s)
-
-    def get_R(c):
-        sum = (W[0] * c[0] * c[0].T).copy()
-        for w, s in zip(W[1:], c[1:]):
-            tmp = w * s * s.T
-            sum += tmp
-        return sum
-
-    def get_m(c):
-        sum = W[0] * c[0].copy()
-        for w, s in zip(W[1:], c[1:]):
-            sum += w * s
-        return sum
-
-    def get_N():
-        sum = W[0].copy()
-        for w in W[1:]:
-            sum += w
-        return sum
-
-
-    C.append(S)
-    R.append(get_R(C[0]))
-    m.append(get_m(C[0]))
-    N.append(get_N())
-    q.append(m[0] / N[0])
-
+    params = get_params_with_saliency(S, Sv=Sv)
+    root = RootNode(parent=None, data=params)
+    palette = []
     for num in range(M - 1):
-        R_ = R[num] - (m[num] * m[num].T) / N[num]
-        W, v = np.linalg.eig(R_)
-        e = v[np.argmax(W)]
+        leaves = root.set_leaves()
+        max_ev = leaves[0].get_data()['max_ev']
+        current_node = leaves[0]
+        for leaf in leaves[1:]:
+            params = leaf.get_data()
+            ev = params['max_ev']
+            if max_ev < ev:
+                current_node = leaf
+                max_ev = ev
 
-        criteria = np.dot(e, q[num][0])
-        compare = np.dot(e, C[num][:, 0, :].T)
+        data = current_node.get_data()
+        current_S = data['S']
+        current_Sv = data['Sv']
+        current_q = data['q']
+        current_e = data['e']
+        criteria = np.dot(current_e, current_q[0])
+        compare = np.dot(current_e, current_S[:, 0, :].T)
         c_2n_index = np.where(compare <= criteria)
         c_2n1_index = np.where(compare > criteria)
         num_c2n = len(c_2n_index[0])
         num_c2n1 = len(c_2n1_index[0])
 
-        c_2n = np.reshape(C[num][c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(C[num][c_2n1_index[0]], (num_c2n1, 1, 3))
+        if num_c2n1 <= 0:
+            # 分割できない
+            # 分散が相当低いはずなので，本来選ばれるはずのない状態
+            print('could not separate the extraction')
+            break
 
-        C.append(c_2n)
-        C.append(c_2n1)
+        # 現ノードから子の作成
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
+        sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
+        sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
 
-        R.append(get_R(c_2n))
-        m.append(get_m(c_2n))
-        N.append(get_N(c_2n))
-        q.append(m[-1] / N[-1])
+        left_params, right_params = get_params_for_bst_with_saliency(c_2n, c_2n1, sv_2n,
+                                                                     sv_2n1, current_node.get_data())
+        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
+        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+        current_node.set_right(right=right)
+        current_node.set_left(left=left)
 
-        R.append(R[num] - R[-1])
-        m.append(m[num] - m[-1])
-        N.append(N[num] - N[-1])
-        q.append(m[-1] / N[-1])
+    leaves = root.set_leaves()
+    for leaf in leaves:
+        params = leaf.get_data()
+        palette.append(params['q'])
 
-    color_palette = np.round(q[len(q) - M:])
+    palette = np.array(palette)
+    color_palette = np.round(palette)
     return color_palette
 
 

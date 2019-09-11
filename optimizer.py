@@ -414,13 +414,17 @@ def CIQ_test_Wu():
 def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
     for dir in DIR:
         for m in M:
+            code = cv2.COLOR_BGR2Lab
+            code_inverse = cv2.COLOR_Lab2BGR
+
             def ciq(img):
+                img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 kmeans, q = KMeans_CIQ(S, m)
                 return kmeans.cluster_centers_
 
-            SAVE = 'KMeans_M{}_{}'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir)
+            SAVE = 'KMeans_M{}_{}_Lab'.format(m, dir)
+            CIQ_test(ciq, SAVE, dir, trans_flag=True, code=code, inverse_code=code_inverse)
 
 
 def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
@@ -692,8 +696,9 @@ if __name__ == '__main__':
     # CIQ_test_sup1(M=[16, 32], R=[0.2, 0,4])
     # CIQ_test_sup2()
     # CIQ_test_gradually()
-    CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img', 'misc'])
-    CIQ_test_BTPD_withSv(M=[16, 32], DIR=['sumple_img', 'misc'])
+    # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    CIQ_test_BTPD_withSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_SMBW(M=[16, 32], DIR=['sumple_img', 'misc'], M0=[0.5, 0.7, 0.8, 0.9])
     # CIQ_test_sup1()
     # CIQ_test_besed_on_SM()

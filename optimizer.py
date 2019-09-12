@@ -366,12 +366,12 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
             code_inverse = cv2.COLOR_Lab2BGR
 
             def ciq(img):
-                luv_img = cv2.cvtColor(img, code)
-                q = BTPD_CIQ(luv_img, m)
+                # luv_img = cv2.cvtColor(img, code)
+                q = BTPD_CIQ(img, m)
                 return q
 
-            SAVE = 'BTPD_M{}_{}_Lab'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse)
+            SAVE = 'fastBTPD_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=code_inverse)
 
 
 def CIQ_test_PSO():
@@ -667,15 +667,15 @@ def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
             inverse_code = cv2.COLOR_Lab2BGR
 
             def ciq(img):
-                luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-                S = np.reshape(luv_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                # luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 _, __, Sv = get_saliency_hist(img, sm='SR')
                 # Sv = 1.0 / (np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16) + 1.0)
                 Sv = (255.0 - np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)) / 255.0
                 q = BTPD_WTSE(S, m, Sv)
                 return q
-            SAVE = 'BTPD_withSv_bySR_M{}_{}_Lab2'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code)
+            SAVE = 'fastBTPD_withSv_bySR_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=inverse_code)
 
 
 def mapping_pallet_to_img(img, pallete):

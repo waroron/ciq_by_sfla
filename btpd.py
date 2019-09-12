@@ -120,10 +120,10 @@ def get_N(c):
     return len(c)
 
 
-def get_params(S):
+def get_params(S, r):
     m = get_m(S)
     N = get_N(S)
-    R = get_R(S)
+    R = np.sum(r, axis=0)
     q = m / N
 
     tmp = (m * m.T) / N
@@ -132,15 +132,13 @@ def get_params(S):
     ev = np.max(W)
     e = v[np.argmax(W)]
 
-    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev}
+    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r}
 
 
-def get_params_with_saliency(S, Sv):
-    m = 0
-    for s, sv in zip(S, Sv):
-        m += s * sv
+def get_params_with_weight(S, Sv, weighted_r, weighted_m):
+    m = np.sum(weighted_m, axis=0)
     N = np.sum(Sv)
-    R = get_R(S, Sv)
+    R = np.sum(weighted_r, axis=0)
     q = m / N
 
     tmp = (m * m.T) / N
@@ -149,11 +147,12 @@ def get_params_with_saliency(S, Sv):
     ev = np.max(W)
     e = v[np.argmax(W)]
 
-    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv}
+    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv,
+            'weighted_r': weighted_r, 'weighted_m': weighted_m}
 
 
-def get_params_for_bst(S1, S2, parent_params):
-    right_params = get_params(S1)
+def get_params_for_bst(S1, S2, r1, r2, parent_params):
+    right_params = get_params(S1, r1)
     m = parent_params['m'] - right_params['m']
     N = parent_params['N'] - right_params['N']
     R = parent_params['R'] - right_params['R']
@@ -163,13 +162,14 @@ def get_params_for_bst(S1, S2, parent_params):
     W, v = np.linalg.eig(R_)
     ev = np.max(W)
     e = v[np.argmax(W)]
-    left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev}
+    left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r2}
     # left_params = get_params(S2)
     return right_params, left_params
 
 
-def get_params_for_bst_with_saliency(S1, S2, Sv1, Sv2, parent_params):
-    right_params = get_params_with_saliency(S1, Sv1)
+def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
+                                   Sv2, weighted_r2, weighted_m2, parent_params):
+    right_params = get_params_with_weight(S1, Sv1, weighted_r1, weighted_m1)
     # m = parent_params['m'] - right_params['m']
     # N = parent_params['N'] - right_params['N']
     # R = parent_params['R'] - right_params['R']
@@ -180,14 +180,17 @@ def get_params_for_bst_with_saliency(S1, S2, Sv1, Sv2, parent_params):
     # ev = np.max(W)
     # e = v[np.argmax(W)]
     # left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv2}
-    left_params = get_params_with_saliency(S2, Sv2)
+    left_params = get_params_with_weight(S2, Sv2, weighted_r2, weighted_m2)
     return right_params, left_params
 
 
 def BTPD(S, M):
+    # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    pre_r = np.array([s * s.T for s in S])
+    pre_r = np.reshape(pre_r, newshape=(len(S), 3, 3))
 
-    params = get_params(S)
+    params = get_params(S, pre_r)
     root = RootNode(parent=None, data=params)
     palette = []
     for num in range(M - 1):
@@ -203,6 +206,7 @@ def BTPD(S, M):
 
         data = current_node.get_data()
         current_S = data['S']
+        current_r = data['r']
         current_q = data['q']
         current_e = data['e']
         criteria = np.dot(current_e, current_q[0])
@@ -222,7 +226,10 @@ def BTPD(S, M):
         c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
         c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
 
-        left_params, right_params = get_params_for_bst(c_2n, c_2n1, current_node.get_data())
+        r_2n = np.reshape(current_r[c_2n_index[0]], (num_c2n, 3, 3))
+        r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, 3, 3))
+
+        left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data())
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
@@ -239,10 +246,15 @@ def BTPD(S, M):
 
 
 def BTPD_WTSE(S, M, Sv):
+    # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
     Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16)
+    pre_m = np.array([w * s for s, w in zip(S, Sv)])
+    pre_R = np.array([m * s.T for m, s in zip(pre_m, S)])
+    pre_m = np.reshape(pre_m, newshape=(len(S), 1, 3))
+    pre_R = np.reshape(pre_R, newshape=(len(S), 3, 3))
 
-    params = get_params_with_saliency(S, Sv=Sv)
+    params = get_params_with_weight(S, Sv, pre_R, pre_m)
     root = RootNode(parent=None, data=params)
     palette = []
     for num in range(M - 1):
@@ -259,6 +271,8 @@ def BTPD_WTSE(S, M, Sv):
         data = current_node.get_data()
         current_S = data['S']
         current_Sv = data['Sv']
+        current_wr = data['weighted_r']
+        current_wm = data['weighted_m']
         current_q = data['q']
         current_e = data['e']
         criteria = np.dot(current_e, current_q[0])
@@ -279,9 +293,14 @@ def BTPD_WTSE(S, M, Sv):
         c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
         sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
         sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
+        weighted_r_2n = np.reshape(current_wr[c_2n_index[0]], (num_c2n, 3, 3))
+        weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
+        weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
+        weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
 
-        left_params, right_params = get_params_for_bst_with_saliency(c_2n, c_2n1, sv_2n,
-                                                                     sv_2n1, current_node.get_data())
+        left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
+                                                                   sv_2n1, weighted_r_2n1, weighted_m_2n1,
+                                                                   current_node.get_data())
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)

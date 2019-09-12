@@ -179,14 +179,15 @@ def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
     # W, v = np.linalg.eig(R_)
     # ev = np.max(W)
     # e = v[np.argmax(W)]
-    # left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv2}
+    # left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e,
+    #                'max_ev': ev, 'Sv': Sv2, 'weighted_r': weighted_r2, 'weighted_m': weighted_m2}
     left_params = get_params_with_weight(S2, Sv2, weighted_r2, weighted_m2)
     return right_params, left_params
 
 
 def BTPD(S, M):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
     pre_r = np.array([s * s.T for s in S])
     pre_r = np.reshape(pre_r, newshape=(len(S), 3, 3))
 
@@ -247,8 +248,8 @@ def BTPD(S, M):
 
 def BTPD_WTSE(S, M, Sv):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
-    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16)
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
+    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
     pre_m = np.array([w * s for s, w in zip(S, Sv)])
     pre_R = np.array([m * s.T for m, s in zip(pre_m, S)])
     pre_m = np.reshape(pre_m, newshape=(len(S), 1, 3))

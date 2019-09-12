@@ -663,19 +663,21 @@ def CIQ_test_SMBW(M=[16], DIR=['sumple_img'], M0=[0.8]):
 def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
     for dir in DIR:
         for m in M:
-            code = cv2.COLOR_BGR2Lab
-            inverse_code = cv2.COLOR_Lab2BGR
+            code = cv2.COLOR_BGR2LAB
+            inverse_code = cv2.COLOR_LAB2BGR
 
             def ciq(img):
-                # luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                # Lab空間に変換してから顕著性マップを算出するか，RGB空間のままで算出するかで精度を印象がだいぶ変わりそう
                 _, __, Sv = get_saliency_hist(img, sm='SR')
+                img = cv2.cvtColor(img, code)
+                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint32)
+
                 # Sv = 1.0 / (np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16) + 1.0)
                 Sv = (255.0 - np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)) / 255.0
                 q = BTPD_WTSE(S, m, Sv)
                 return q
-            SAVE = 'fastBTPD_withSv_bySR_M{}_{}'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=inverse_code)
+            SAVE = 'fastBTPD_withSv_bySR_M{}_{}_LAB2'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code)
 
 
 def mapping_pallet_to_img(img, pallete):

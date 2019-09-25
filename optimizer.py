@@ -77,92 +77,88 @@ def Wu_method(S, K):
     # v = pca.components_
     mapping = np.reshape(pca.transform(S[:, 0, :]), len(S))
     # N projections into M < N buckets
-    M = 512
-    sumpled_S = S[::M]
+    M = 128
     sumpled_mapping = mapping[::M]
     print('{} --> {}'.format(len(S), len(sumpled_mapping)))
     N = len(sumpled_mapping)
-    E = np.zeros(shape=N)       # 片方向の誤差
-    L = np.zeros(shape=(K, N), dtype=np.uint16)      # L[k, n] : k <= i <= nの間で誤差が最小となるパーティション群の最後のもの
+    E = np.empty(shape=N - 1)
+    L = np.empty(shape=(K, N))
     listed_S = np.empty(shape=S.shape)
 
-    sorted_index = np.argsort(sumpled_mapping)
-    listed_S = sumpled_S[sorted_index]
-    listed_mapping = sumpled_mapping[sorted_index]
+    sorted_index = np.argsort(mapping)
+    listed_S = S[sorted_index]
+    listed_mapping = mapping[sorted_index]
 
     def Lchain(k, n):
         t = n - 1
-        q = np.empty(shape=K, dtype=int)
+        q = np.empty(shape=K + 1)
         for j in range(k - 1, -1, -1):
             q[j] = L[j, t]
-            t = L[j, t]
+            t = int(L[j, t])
             print(t)
         return q
 
+    def W0(n):
+        return len(listed_S[:n])
+
+    def W1(d, n):
+        cd = 0
+        for c in listed_S[:n]:
+            cd += c[:, d]
+        return cd
+
+    def W2(n):
+        cd = 0
+        for c in listed_S[:n]:
+            cd += np.sum(c) ** 2
+        return cd
+
     print('start preconputing')
     # precompute for evaluating error
-    w0 = np.empty(shape=N, dtype=np.uint16)
-    w1 = np.empty(shape=(N, 3), dtype=np.uint32)
-    w2 = np.empty(shape=N, dtype=np.uint64)
+    w0 = np.empty(shape=N)
+    w1 = np.empty(shape=(3, N))
+    w2 = np.empty(shape=N)
 
-    w0[0] = 1
-    w1[0, :] = listed_S[0]
-    w2[0] = np.sum(listed_S[0] ** 2)
-    for n in range(1, N):
-        # w0[n] += w0[n] + 1
-        w0[n] = n + 1
-        w1[n, :] = w1[n - 1, :] + listed_S[n]
-        w2[n] = w2[n - 1] + np.sum(listed_S[n] ** 2)
-
-    print('precomputation')
+    for n in range(N):
+        w0[n] = W0(n + 1)
+        w2[n] = W2(n + 1)
+        print(n)
+        for d in range(2):
+            w1[d, n] = W1(d, n + 1)
 
     def quantized_error(a, b):
         """
-        z = np.median(listed_S[a:b])
+        z = np.median(listed_S[a:b - 1])
         err = 0
-        for c in listed_S[a:b]:
+        for c in listed_S[a:b - 1]:
             err += np.linalg.norm(c - z)
         return err
         だとめちゃくちゃ遅いので，Section4.4よりlinear timeで計算するために工夫する
         """
-        tmp = w1[b, :] - w1[a, :]
-        tmp = tmp ** 2
-        tmp1 = np.sum(tmp)
-        tmp2 = w0[b] - w0[a]
-        assert tmp2 != 0, "zaro division error: a:{} b: {}".format(a, b)
-        frac = tmp1 / tmp2
-        err = w2[b] - w2[a] - frac
-        return err
+        frac = np.sum((w1[:, b] - w1[:, a]) ** 2) / (w0[b] - w0[a])
+        return w2[b] - w2[a] - frac
 
     for num in range(1, N):
         # 実際はe(0, 0)は存在しないため(0, 0) --> (0, 1)と置き換えている
-        E[num] = quantized_error(0, num)
+        E[num - 1] = quantized_error(0, num)
 
     for num in range(0, K):
-        L[num, num] = num
+        L[num, num] = num - 1
 
     print('initialization over')
-    for k in range(K - 1):
+    for k in range(2, K + 1):
         print(k)
-        for n in range(k + 1, N - K + k):
-            # 末尾から計算する
-            cut = n     # n までの誤差最小となるパーティションを決定する
-            e = E[n]
-            # e = quantized_error(0, n)
-            for t in range(n - 1, k - 1, -1):
-                # 末尾から頭まで戻ってくるように計算する
-                # t までの誤差とt から末尾までの誤差の合計が最小となるパーティションを決定する
-                q_err = quantized_error(t, n)
-                total_err = q_err + E[t]
-                # total_err = q_err + quantized_error(0, t)
-                if total_err < e:
+        for n in range(k + 1, N - K + k + 1):
+            cut = n - 1
+            e = E[n - 2]
+            for t in range(n - 2, k - 2, -1):
+                q_err = quantized_error(t, n - 1)
+                if E[t] + q_err < e:
                     cut = t
-                    e = total_err
-            L[k, n] = cut
-            E[n] = e
-    palette_index = Lchain(K, N)
-    palette = listed_S[palette_index]
-    return palette
+                    e = E[t] + q_err
+            L[k - 1, n - 1] = cut
+            E[n - 2] = e
+    return Lchain(K, N)
 
 
 def OneMaxBySFLA():
@@ -398,19 +394,21 @@ def CIQ_test_PSO():
 
 
 def CIQ_test_Wu():
-    DIR = 'misc'
+    DIR = 'sumple_img'
     M = 16
+    imgs = os.listdir(DIR)
 
-    code = cv2.COLOR_BGR2Lab
-    code_inverse = cv2.COLOR_Lab2BGR
-
-    def ciq(img):
-        # img = cv2.cvtColor(img, code)
+    for img_path in imgs:
+        path = os.path.join(DIR, img_path)
+        img = cv2.imread(path)
+        st = time.time()
         q = Wu_CIQ(img, M)
-        return q
+        en = time.time()
+        print('{}: {} colors pallete by Wu\'s method: time {}'.format(img_path, M, en - st))
+        for pix in q:
+            print(pix)
 
-    SAVE = 'Wu_M{}_{}'.format(M, DIR)
-    CIQ_test(ciq, SAVE, DIR, trans_flag=False, code=code, inverse_code=code_inverse)
+        print('\n\n')
 
 
 def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
@@ -665,19 +663,19 @@ def CIQ_test_SMBW(M=[16], DIR=['sumple_img'], M0=[0.8]):
 def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
     for dir in DIR:
         for m in M:
-            code = cv2.COLOR_BGR2LAB
-            inverse_code = cv2.COLOR_LAB2BGR
+            code = cv2.COLOR_BGR2Lab
+            inverse_code = cv2.COLOR_Lab2BGR
 
             def ciq(img):
-                luv_img = cv2.cvtColor(img, code)
-                S = np.reshape(luv_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                # luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 _, __, Sv = get_saliency_hist(img, sm='SR')
                 # Sv = 1.0 / (np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16) + 1.0)
-                Sv = (np.reshape((255.0 - Sv) / 255.0, newshape=(len(S), 1)).astype(np.float32))
+                Sv = (255.0 - np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)) / 255.0
                 q = BTPD_WTSE(S, m, Sv)
                 return q
-            SAVE = 'fastBTPD_withSv_bySR_M{}_{}_LAB'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code)
+            SAVE = 'fastBTPD_withSv_bySR_M{}_{}'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=inverse_code)
 
 
 def mapping_pallet_to_img(img, pallete):

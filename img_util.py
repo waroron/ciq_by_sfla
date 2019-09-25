@@ -181,7 +181,9 @@ def test_saliency_map():
 
     for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
-        img = cv2.imread(path)
+        org_img = cv2.imread(path)
+        img = org_img.copy()
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
         root, ext = os.path.splitext(img_path)
         img_dir = os.path.join(SAVE, root)
 
@@ -204,7 +206,7 @@ def test_saliency_map():
             count = 0
             for num, bin in zip(hist[::-1], bins[::-1]):
                 indices = np.where(saliency_map == int(bin))
-                pickup_sm[indices] = img[indices]
+                pickup_sm[indices] = org_img[indices]
 
                 count += num
                 if count >= th:
@@ -222,7 +224,7 @@ def test_saliency_map():
             count = 0
             for num, bin in zip(hist[::1], bins[::1]):
                 indices = np.where(saliency_map == int(bin))
-                pickup_sm[indices] = img[indices]
+                pickup_sm[indices] = org_img[indices]
 
                 count += num
                 if count >= th:
@@ -248,7 +250,7 @@ def test_saliency_map():
             save_pickup = os.path.join(img_dir, 'pickup_bin{}-bin{}'.format(bin, bin + PART) + img_path)
             for n in range(bin, bin + PART):
                 indices = np.where(saliency_map == int(n))
-                pickup_sm[indices] = img[indices]
+                pickup_sm[indices] = org_img[indices]
             cv2.imwrite(save_pickup, pickup_sm)
             print('save fig {}'.format(save_pickup))
 
@@ -319,6 +321,7 @@ def test_sm_variance():
     for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         img = cv2.imread(path)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
         hist, bins, sm = get_saliency_hist(img)
         root, ext = os.path.splitext(img_path)
         img_dir = os.path.join(SAVE, root)

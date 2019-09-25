@@ -248,7 +248,7 @@ def BTPD(S, M):
 def BTPD_WTSE(S, M, Sv):
     # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
-    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float16)
+    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
     pre_m = np.array([w * s for s, w in zip(S, Sv)])
     pre_R = np.array([m * s.T for m, s in zip(pre_m, S)])
     pre_m = np.reshape(pre_m, newshape=(len(S), 1, 3))

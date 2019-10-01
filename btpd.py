@@ -16,6 +16,10 @@ class Node:
     def set_left(self, left):
         self.left = left
 
+    def set_data(self, data):
+        for key in data.keys():
+            self.data[key] = data[key]
+
     def set_height(self):
         height = 0
         node = self
@@ -120,7 +124,7 @@ def get_N(c):
     return len(c)
 
 
-def get_params(S, r):
+def get_params(S, r, index=None):
     m = get_m(S)
     N = get_N(S)
     R = np.sum(r, axis=0)
@@ -132,10 +136,10 @@ def get_params(S, r):
     ev = np.max(W)
     e = v[np.argmax(W)]
 
-    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r}
+    return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r, 'index': index}
 
 
-def get_params_with_weight(S, Sv, weighted_r, weighted_m):
+def get_params_with_weight(S, Sv, weighted_r, weighted_m, index=None):
     m = np.sum(weighted_m, axis=0)
     N = np.sum(Sv)
     R = np.sum(weighted_r, axis=0)
@@ -148,11 +152,11 @@ def get_params_with_weight(S, Sv, weighted_r, weighted_m):
     e = v[np.argmax(W)]
 
     return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv,
-            'weighted_r': weighted_r, 'weighted_m': weighted_m}
+            'weighted_r': weighted_r, 'weighted_m': weighted_m, 'index': index}
 
 
-def get_params_for_bst(S1, S2, r1, r2, parent_params):
-    right_params = get_params(S1, r1)
+def get_params_for_bst(S1, S2, r1, r2, parent_params, index1=None, index2=None):
+    right_params = get_params(S1, r1, index=index1)
     m = parent_params['m'] - right_params['m']
     N = parent_params['N'] - right_params['N']
     R = parent_params['R'] - right_params['R']
@@ -162,14 +166,14 @@ def get_params_for_bst(S1, S2, r1, r2, parent_params):
     W, v = np.linalg.eig(R_)
     ev = np.max(W)
     e = v[np.argmax(W)]
-    left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r2}
+    left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r2, 'index': index2}
     # left_params = get_params(S2)
     return right_params, left_params
 
 
 def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
-                                   Sv2, weighted_r2, weighted_m2, parent_params):
-    right_params = get_params_with_weight(S1, Sv1, weighted_r1, weighted_m1)
+                                   Sv2, weighted_r2, weighted_m2, index1=None, index2=None):
+    right_params = get_params_with_weight(S1, Sv1, weighted_r1, weighted_m1, index=index1)
     # m = parent_params['m'] - right_params['m']
     # N = parent_params['N'] - right_params['N']
     # R = parent_params['R'] - right_params['R']
@@ -180,17 +184,18 @@ def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
     # ev = np.max(W)
     # e = v[np.argmax(W)]
     # left_params = {'S': S2, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'Sv': Sv2}
-    left_params = get_params_with_weight(S2, Sv2, weighted_r2, weighted_m2)
+    left_params = get_params_with_weight(S2, Sv2, weighted_r2, weighted_m2, index=index2)
     return right_params, left_params
 
 
 def BTPD(S, M):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    n_ch = S.shape[-1]
+    S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
     pre_r = np.array([s * s.T for s in S])
-    pre_r = np.reshape(pre_r, newshape=(len(S), 3, 3))
+    pre_r = np.reshape(pre_r, newshape=(len(S), n_ch, n_ch))
 
-    params = get_params(S, pre_r)
+    params = get_params(S, pre_r, index=[n for n in range(len(S))])
     root = RootNode(parent=None, data=params)
     palette = []
     for num in range(M - 1):
@@ -223,13 +228,14 @@ def BTPD(S, M):
             break
 
         # 現ノードから子の作成
-        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, n_ch))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, n_ch))
 
-        r_2n = np.reshape(current_r[c_2n_index[0]], (num_c2n, 3, 3))
-        r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, 3, 3))
+        r_2n = np.reshape(current_r[c_2n_index[0]], (num_c2n, n_ch, n_ch))
+        r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, n_ch, n_ch))
 
-        left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data())
+        left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data(),
+                                                       index1=c_2n_index, index2=c_2n1_index)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
@@ -242,12 +248,12 @@ def BTPD(S, M):
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette
+    return color_palette, root
 
 
 def BTPD_WTSE(S, M, Sv):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
     Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
     pre_m = np.array([w * s for s, w in zip(S, Sv)])
     pre_R = np.array([m * s.T for m, s in zip(pre_m, S)])
@@ -314,6 +320,270 @@ def BTPD_WTSE(S, M, Sv):
     palette = np.array(palette)
     color_palette = np.round(palette)
     return color_palette
+
+
+def BTPD_PaletteDeterminationFromSV(S, M, Sv):
+    """
+    顕著性マップのみで二分木を分割していく
+    --> 顕著度の高い色が保存されるかと思ったけどダメ
+    :param S:
+    :param M:
+    :param Sv:
+    :return:
+    """
+    # precalc
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint64)
+    pre_r = np.array([s * s.T for s in S])
+    pre_r = np.reshape(pre_r, newshape=(len(S), 3, 3))
+    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
+
+    params = get_params(S, pre_r)
+    params['Sv'] = Sv
+    root = RootNode(parent=None, data=params)
+    palette = []
+    for num in range(M - 1):
+        leaves = root.set_leaves()
+        max_ev = leaves[0].get_data()['max_ev']
+        current_node = leaves[0]
+        for leaf in leaves[1:]:
+            params = leaf.get_data()
+            ev = params['max_ev']
+            if max_ev < ev:
+                current_node = leaf
+                max_ev = ev
+
+        data = current_node.get_data()
+        current_S = data['S']
+        current_Sv = data['Sv']
+        current_r = data['r']
+        current_q = data['q']
+        current_e = data['e']
+        criteria = np.dot(current_e, current_q[0])
+        compare = np.dot(current_e, current_S[:, 0, :].T)
+        c_2n_index = np.where(compare <= criteria)
+        c_2n1_index = np.where(compare > criteria)
+        num_c2n = len(c_2n_index[0])
+        num_c2n1 = len(c_2n1_index[0])
+
+        if num_c2n1 <= 0:
+            # 分割できない
+            # 分散が相当低いはずなので，本来選ばれるはずのない状態
+            print('could not separate the extraction')
+            break
+
+        # 現ノードから子の作成
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
+        r_2n = np.reshape(current_r[c_2n_index[0]], (num_c2n, 3, 3))
+        r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, 3, 3))
+        sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
+        sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
+
+        left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data())
+        left_params['Sv'] = sv_2n
+        right_params['Sv'] = sv_2n1
+        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
+        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+        current_node.set_right(right=right)
+        current_node.set_left(left=left)
+
+    leaves = root.set_leaves()
+    for leaf in leaves:
+        params = leaf.get_data()
+        palette.append(SvweightedPaletteDetermination(params['S'], params['Sv']))
+
+    palette = np.array(palette)
+    color_palette = np.round(palette)
+    return color_palette
+
+
+def BTPD_InitializationFromSv(S, M, Sv, weights):
+    """
+    最初数回を，顕著性マップのみで分割する
+    その後，顕著度に基づく重みを用いて色空間上を分割する．
+    --> 顕著性マップのみ，っていうのがダメっぽい
+    :param S:
+    :param M:
+    :param Sv:
+    :param weights:
+    :return:
+    """
+    # precalc
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
+    W = np.reshape(weights, newshape=(len(S), 1, 1)).astype(np.float32)
+
+    palette = []
+    M0 = 2
+    __, root = BTPD(Sv, M0)
+    #
+    leaves = root.set_leaves()
+    for leave in leaves:
+        data = leave.get_data()
+        index = data['index']
+        current_S = S[index]
+        current_W = W[index]
+
+        pre_m = np.array([w * s for s, w in zip(current_S, current_W)])
+        pre_R = np.array([m * s.T for m, s in zip(pre_m, current_S)])
+        pre_m = np.reshape(pre_m, newshape=(len(current_S), 1, 3))
+        pre_R = np.reshape(pre_R, newshape=(len(current_S), 3, 3))
+        params = get_params_with_weight(current_S, current_W, pre_R, pre_m)
+        leave.set_data(params)
+
+    for num in range(M - M0):
+        leaves = root.set_leaves()
+        max_ev = leaves[0].get_data()['max_ev']
+        current_node = leaves[0]
+        for leaf in leaves[1:]:
+            params = leaf.get_data()
+            ev = params['max_ev']
+            if max_ev < ev:
+                current_node = leaf
+                max_ev = ev
+
+        data = current_node.get_data()
+        current_S = data['S']
+        current_Sv = data['Sv']
+        current_wr = data['weighted_r']
+        current_wm = data['weighted_m']
+        current_q = data['q']
+        current_e = data['e']
+        criteria = np.dot(current_e, current_q[0])
+        compare = np.dot(current_e, current_S[:, 0, :].T)
+        c_2n_index = np.where(compare <= criteria)
+        c_2n1_index = np.where(compare > criteria)
+        num_c2n = len(c_2n_index[0])
+        num_c2n1 = len(c_2n1_index[0])
+
+        if num_c2n1 <= 0:
+            # 分割できない
+            # 分散が相当低いはずなので，本来選ばれるはずのない状態
+            print('could not separate the extraction')
+            break
+
+        # 現ノードから子の作成
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
+        sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
+        sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
+        weighted_r_2n = np.reshape(current_wr[c_2n_index[0]], (num_c2n, 3, 3))
+        weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
+        weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
+        weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
+
+        left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
+                                                                   sv_2n1, weighted_r_2n1, weighted_m_2n1,
+                                                                   current_node.get_data())
+        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
+        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+        current_node.set_right(right=right)
+        current_node.set_left(left=left)
+
+    leaves = root.set_leaves()
+    for leaf in leaves:
+        params = leaf.get_data()
+        palette.append(params['q'])
+
+    palette = np.array(palette)
+    color_palette = np.round(palette)
+    return color_palette
+
+
+def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):
+    """
+    最初数回を，顕著性マップ + 色空間で分割する
+    その後，顕著度に基づく重みを用いて色空間上を分割する．
+    --> 顕著性マップのみ，っていうのがダメっぽい
+    :param S:
+    :param M:
+    :param Sv:
+    :param weights:
+    :return:
+    """
+    # precalc
+    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
+    W = np.reshape(weights, newshape=(len(S), 1, 1)).astype(np.float32)
+    S_Sv = np.concatenate([S, Sv], axis=2)
+
+    palette = []
+    M0 = 6
+    __, root = BTPD(S_Sv, M0)
+    #
+    leaves = root.set_leaves()
+    for leave in leaves:
+        data = leave.get_data()
+        index = data['index']
+        current_S = S[index]
+        current_W = W[index]
+
+        pre_m = np.array([w * s for s, w in zip(current_S, current_W)])
+        pre_R = np.array([m * s.T for m, s in zip(pre_m, current_S)])
+        pre_m = np.reshape(pre_m, newshape=(len(current_S), 1, 3))
+        pre_R = np.reshape(pre_R, newshape=(len(current_S), 3, 3))
+        params = get_params_with_weight(current_S, current_W, pre_R, pre_m)
+        leave.set_data(params)
+
+    for num in range(M - M0):
+        leaves = root.set_leaves()
+        max_ev = leaves[0].get_data()['max_ev']
+        current_node = leaves[0]
+        for leaf in leaves[1:]:
+            params = leaf.get_data()
+            ev = params['max_ev']
+            if max_ev < ev:
+                current_node = leaf
+                max_ev = ev
+
+        data = current_node.get_data()
+        current_S = data['S']
+        current_Sv = data['Sv']
+        current_wr = data['weighted_r']
+        current_wm = data['weighted_m']
+        current_q = data['q']
+        current_e = data['e']
+        criteria = np.dot(current_e, current_q[0])
+        compare = np.dot(current_e, current_S[:, 0, :].T)
+        c_2n_index = np.where(compare <= criteria)
+        c_2n1_index = np.where(compare > criteria)
+        num_c2n = len(c_2n_index[0])
+        num_c2n1 = len(c_2n1_index[0])
+
+        if num_c2n1 <= 0:
+            # 分割できない
+            # 分散が相当低いはずなので，本来選ばれるはずのない状態
+            print('could not separate the extraction')
+            break
+
+        # 現ノードから子の作成
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
+        sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
+        sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
+        weighted_r_2n = np.reshape(current_wr[c_2n_index[0]], (num_c2n, 3, 3))
+        weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
+        weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
+        weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
+
+        left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
+                                                                   sv_2n1, weighted_r_2n1, weighted_m_2n1,
+                                                                   index1=c_2n_index, index2=c_2n1_index)
+        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
+        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+        current_node.set_right(right=right)
+        current_node.set_left(left=left)
+
+    leaves = root.set_leaves()
+    for leaf in leaves:
+        params = leaf.get_data()
+        palette.append(params['q'])
+
+    palette = np.array(palette)
+    color_palette = np.round(palette)
+    return color_palette, root
+
+
+def SvweightedPaletteDetermination(pixels, Sv):
+    return (np.sum(pixels[:, 0, :] * Sv, axis=0) / np.sum(Sv)).astype(np.uint8)
 
 
 def EBW_CIQ(S, M):

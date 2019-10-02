@@ -195,7 +195,7 @@ def BTPD(S, M):
     pre_r = np.array([s * s.T for s in S])
     pre_r = np.reshape(pre_r, newshape=(len(S), n_ch, n_ch))
 
-    params = get_params(S, pre_r, index=[n for n in range(len(S))])
+    params = get_params(S, pre_r, index=np.array([n for n in range(len(S))]))
     root = RootNode(parent=None, data=params)
     palette = []
     for num in range(M - 1):
@@ -218,6 +218,8 @@ def BTPD(S, M):
         compare = np.dot(current_e, current_S[:, 0, :].T)
         c_2n_index = np.where(compare <= criteria)
         c_2n1_index = np.where(compare > criteria)
+        n_index_in_S = data['index'][c_2n_index]
+        n1_index_in_S = data['index'][c_2n1_index]
         num_c2n = len(c_2n_index[0])
         num_c2n1 = len(c_2n1_index[0])
 
@@ -235,7 +237,7 @@ def BTPD(S, M):
         r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, n_ch, n_ch))
 
         left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data(),
-                                                       index1=c_2n_index, index2=c_2n1_index)
+                                                       index1=n_index_in_S, index2=n1_index_in_S)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
@@ -260,7 +262,7 @@ def BTPD_WTSE(S, M, Sv):
     pre_m = np.reshape(pre_m, newshape=(len(S), 1, 3))
     pre_R = np.reshape(pre_R, newshape=(len(S), 3, 3))
 
-    params = get_params_with_weight(S, Sv, pre_R, pre_m)
+    params = get_params_with_weight(S, Sv, pre_R, pre_m, index=np.array([n for n in range(len(S))]))
     root = RootNode(parent=None, data=params)
     palette = []
     for num in range(M - 1):
@@ -303,10 +305,12 @@ def BTPD_WTSE(S, M, Sv):
         weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
         weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
         weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
+        n_index_in_S = data['index'][c_2n_index]
+        n1_index_in_S = data['index'][c_2n1_index]
 
         left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
                                                                    sv_2n1, weighted_r_2n1, weighted_m_2n1,
-                                                                   current_node.get_data())
+                                                                   n_index_in_S, n1_index_in_S)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
@@ -319,7 +323,7 @@ def BTPD_WTSE(S, M, Sv):
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette
+    return color_palette, root
 
 
 def BTPD_PaletteDeterminationFromSV(S, M, Sv):
@@ -506,7 +510,7 @@ def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):
     S_Sv = np.concatenate([S, Sv], axis=2)
 
     palette = []
-    M0 = 6
+    M0 = int(M / 4)
     __, root = BTPD(S_Sv, M0)
     #
     leaves = root.set_leaves()
@@ -520,7 +524,7 @@ def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):
         pre_R = np.array([m * s.T for m, s in zip(pre_m, current_S)])
         pre_m = np.reshape(pre_m, newshape=(len(current_S), 1, 3))
         pre_R = np.reshape(pre_R, newshape=(len(current_S), 3, 3))
-        params = get_params_with_weight(current_S, current_W, pre_R, pre_m)
+        params = get_params_with_weight(current_S, current_W, pre_R, pre_m, index=index)
         leave.set_data(params)
 
     for num in range(M - M0):
@@ -545,6 +549,8 @@ def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):
         compare = np.dot(current_e, current_S[:, 0, :].T)
         c_2n_index = np.where(compare <= criteria)
         c_2n1_index = np.where(compare > criteria)
+        n_index_in_S = data['index'][c_2n_index]
+        n1_index_in_S = data['index'][c_2n1_index]
         num_c2n = len(c_2n_index[0])
         num_c2n1 = len(c_2n1_index[0])
 
@@ -566,7 +572,7 @@ def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):
 
         left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
                                                                    sv_2n1, weighted_r_2n1, weighted_m_2n1,
-                                                                   index1=c_2n_index, index2=c_2n1_index)
+                                                                   index1=n_index_in_S, index2=n1_index_in_S)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)

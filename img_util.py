@@ -103,6 +103,7 @@ def get_saliency_upper_th(img, R, sm='FineGrained'):
     extract = []
     extract_partition = []
     zeros = np.zeros(shape=img.shape)
+    min_sm = 255
     for num, bin in zip(hist[::-1], bins[::-1]):
         indices = np.where(sm == int(bin))
         pixels = img[indices]
@@ -112,8 +113,9 @@ def get_saliency_upper_th(img, R, sm='FineGrained'):
 
         count += num
         if count >= th:
+            min_sm = bin
             break
-    return np.array(extract), np.array(extract_partition), zeros
+    return np.array(extract), np.array(extract_partition), zeros, min_sm
 
 
 def get_saliency_lower_th(img, R, sm='FineGrained'):

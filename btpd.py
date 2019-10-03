@@ -134,6 +134,7 @@ def get_params(S, r, index=None):
     R_ = R - tmp
     W, v = np.linalg.eig(R_)
     ev = np.max(W)
+    # var = np.var(S)
     e = v[np.argmax(W)]
 
     return {'S': S, 'm': m, 'N': N, 'R': R, 'q': q, 'e': e, 'max_ev': ev, 'r': r, 'index': index}
@@ -200,14 +201,8 @@ def BTPD(S, M):
     palette = []
     for num in range(M - 1):
         leaves = root.set_leaves()
-        max_ev = leaves[0].get_data()['max_ev']
-        current_node = leaves[0]
-        for leaf in leaves[1:]:
-            params = leaf.get_data()
-            ev = params['max_ev']
-            if max_ev < ev:
-                current_node = leaf
-                max_ev = ev
+        max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
+        current_node = leaves[int(np.argmax(max_ev_arr))]
 
         data = current_node.get_data()
         current_S = data['S']
@@ -242,6 +237,69 @@ def BTPD(S, M):
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
         current_node.set_left(left=left)
+
+    leaves = root.set_leaves()
+    for leaf in leaves:
+        params = leaf.get_data()
+        palette.append(params['q'])
+
+    palette = np.array(palette)
+    color_palette = np.round(palette)
+    return color_palette, root
+
+
+def BTPD_LimitationSv(S, limit):
+    # precalc
+    n_ch = S.shape[-1]
+    S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
+    pre_r = np.array([s * s.T for s in S])
+    pre_r = np.reshape(pre_r, newshape=(len(S), n_ch, n_ch))
+
+    params = get_params(S, pre_r, index=np.array([n for n in range(len(S))]))
+    root = RootNode(parent=None, data=params)
+    palette = []
+    max_ev = np.inf
+    num = 0
+    while limit < max_ev:
+        leaves = root.set_leaves()
+        max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
+        max_ev = np.max(max_ev_arr)
+        current_node = leaves[int(np.argmax(max_ev_arr))]
+
+        data = current_node.get_data()
+        current_S = data['S']
+        current_r = data['r']
+        current_q = data['q']
+        current_e = data['e']
+        criteria = np.dot(current_e, current_q[0])
+        compare = np.dot(current_e, current_S[:, 0, :].T)
+        c_2n_index = np.where(compare <= criteria)
+        c_2n1_index = np.where(compare > criteria)
+        n_index_in_S = data['index'][c_2n_index]
+        n1_index_in_S = data['index'][c_2n1_index]
+        num_c2n = len(c_2n_index[0])
+        num_c2n1 = len(c_2n1_index[0])
+
+        if num_c2n1 <= 0:
+            # 分割できない
+            # 分散が相当低いはずなので，本来選ばれるはずのない状態
+            print('could not separate the extraction')
+            break
+
+        # 現ノードから子の作成
+        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, n_ch))
+        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, n_ch))
+
+        r_2n = np.reshape(current_r[c_2n_index[0]], (num_c2n, n_ch, n_ch))
+        r_2n1 = np.reshape(current_r[c_2n1_index[0]], (num_c2n1, n_ch, n_ch))
+
+        left_params, right_params = get_params_for_bst(c_2n, c_2n1, r_2n, r_2n1, current_node.get_data(),
+                                                       index1=n_index_in_S, index2=n1_index_in_S)
+        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
+        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+        current_node.set_right(right=right)
+        current_node.set_left(left=left)
+        num += 1
 
     leaves = root.set_leaves()
     for leaf in leaves:

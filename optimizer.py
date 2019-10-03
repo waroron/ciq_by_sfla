@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.decomposition import PCA
 from skimage.measure import compare_nrmse, compare_psnr
 from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors, get_spectralresidual, get_saliency_lower_th
-from btpd import BTPD, SMBW_BTPD, BTPD_WTSE, BTPD_PaletteDeterminationFromSV, BTPD_InitializationFromSv, BTPD_InitializationFromIncludingSv
+from btpd import BTPD, SMBW_BTPD, BTPD_WTSE, BTPD_PaletteDeterminationFromSV, BTPD_InitializationFromSv, BTPD_InitializationFromIncludingSv, BTPD_LimitationSv
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -298,7 +298,7 @@ def compare_labmse(img1, img2):
 
 
 def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.COLOR_BGR2Lab,
-             inverse_code=cv2.COLOR_Lab2BGR, view_distribution=False):
+             inverse_code=cv2.COLOR_Lab2BGR, view_distribution=False, save_tmpSM=False):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
@@ -313,12 +313,16 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
         save_path = os.path.join(SAVE, root)
         img = cv2.imread(path)
         st = time.time()
-        groups = []
+        groups = None
+        tmp_sm = None
         try:
+            dict = ciq(img)
+            palette = dict['palette']
             if view_distribution:
-                palette, groups = ciq(img)
-            else:
-                palette, groups = ciq(img)
+                groups = dict['groups']
+            if save_tmpSM:
+                tmp_sm = dict['tmp_sm']
+
         except np.linalg.LinAlgError:
             print('LinAlgError in {}'.format(img_path))
             continue
@@ -375,6 +379,10 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
         residual_path = os.path.join(save_path, 'residual_' + img_path)
         cv2.imwrite(residual_path, residual)
 
+        # save tmp sm
+        tmp_sm_path = os.path.join(save_path, 'tmp_sm_' + img_path)
+        cv2.imwrite(tmp_sm_path, tmp_sm)
+
         # MSE in each saliency
         save_mse_in_eachSaliency(img, mapped, save_path, 'MSEinEachSaliency_' + root + '.jpg')
 
@@ -388,13 +396,13 @@ def save_mse_in_eachSaliency(img, mapped, save_path, filename):
     luv_mse_sv = np.zeros(shape=256)
     for num in range(0, 256):
         position = np.where(sm == num)
+        if len(position) == 0:
+            continue
         # rgb_mse = (np.square(img[position] - mapped[position])).mean()
         rgb_mse = compare_nrmse(img[position], mapped[position])
         luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
         luv_mapping = cv2.cvtColor(mapped, cv2.COLOR_BGR2LUV)
         luv_mse = compare_nrmse(luv_img[position], luv_mapping[position])
-        if len(position) == 0:
-            continue
         rgb_mse_sv[num] = rgb_mse
         luv_mse_sv[num] = luv_mse
 
@@ -419,17 +427,34 @@ def save_color_distribution(groups, save_path, filename):
     while width ** 2 < len(groups):
         width += 1
     for num, group in enumerate(groups):
+        COLUMNS = ['Variances', 'Variances by uniques', 'Mean']
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection='3d')  # 何もプロットしていないAxesでもAxisは自動的に作られる
         colors = group / 255.0
-        ax.scatter(group[:, 0], group[:, 1], group[:, 2], c=colors, marker='.')
-        ax.set_title("Distribution")
-        # ax.set_xlabel("saliency")
-        # ax.set_ylabel("mean of MSE")
-        # ax.set_xlim([0, 255])
-        # ax.set_ylim([0, 255])
+        ax.scatter(group[:, 0], group[:, 1], group[:, 2], c=colors, marker=',', label='pixels')
+
+        # Mean value
+        mean = np.mean(group, axis=0).astype(np.uint8)
+        colors = mean / 255.0
+        ax.scatter(mean[0], mean[1], mean[2], c=[colors], marker='*', label='mean')
+
+        # Values by uniques
+        uniq = np.unique(group, axis=0)
+        var_uniq = np.var(uniq)
+
+        CellText = [[np.var(group), var_uniq, mean]]
+
+        ax.set_title("{} Color Luminecence Distribution".format(num + 1))
+        ax.set_xlabel("B")
+        ax.set_ylabel("G")
+        ax.set_zlabel("R")
+        ax.set_xlim([0, 255])
+        ax.set_ylim([0, 255])
+        ax.set_zlim([0, 255])
         # ax.legend()
         ax.grid()
+
+        ax.table(cellText=CellText, colLabels=COLUMNS, loc='bottom')
         filepath = os.path.join(save_path, '{}_'.format(num) + filename)
         plt.savefig(filepath)
         plt.close()
@@ -444,19 +469,24 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
             def ciq(img):
                 trans_img = cv2.cvtColor(img, code)
                 org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 q, root = BTPD(S, m)
                 leaves = root.get_leaves()
                 groups = []
+                sv = []
                 for leaf in leaves:
-                    index = leaf.get_data()['index']
+                    data = leaf.get_data()
+                    index = data['index']
+                    sv.append(data['max_ev'])
                     pixels = org_S[index]
                     pixels = np.reshape(pixels, newshape=(len(pixels), 3))
                     groups.append(pixels)
-                return q, np.array(groups)
+                dict = {'palette': q,
+                        'groups': groups}
+                return dict
 
-            SAVE = 'fastBTPD_M{}_{}_LAB'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse,
+            SAVE = 'fastBTPD_M{}_{}_BGR'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=code_inverse,
                      view_distribution=True)
 
 
@@ -870,11 +900,107 @@ def CIQ_test_BTPD_InitializationFromIncludingSv(M=[16], DIR=['sumple_img']):
                     pixels = org_S[index]
                     pixels = np.reshape(pixels, newshape=(len(pixels), 3))
                     groups.append(pixels)
-                return q, np.array(groups)
+                dict = {'palette': q,
+                        'groups': groups}
+                return dict
 
             SAVE = 'InitIncludingSv_m{}_{}_2'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
                      view_distribution=True)
+
+
+def CIQ_test_BTPD_PreQuantize(M=[16], DIR=['sumple_img'], LIMIT=[1000]):
+    for dir in DIR:
+        for m in M:
+            for lim in LIMIT:
+                code = cv2.COLOR_BGR2LAB
+                inverse_code = cv2.COLOR_LAB2BGR
+
+                def ciq(img):
+                    trans_img = cv2.cvtColor(img, code)
+                    org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                    S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+
+                    # pre quantize
+                    q, root = BTPD_LimitationSv(S, lim)
+                    mapped = mapping_pallet_to_img(trans_img, q)
+                    print('pre quantize {} colors'.format(len(root.get_leaves())))
+
+                    _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
+                    Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.uint32)
+                    S = np.reshape(mapped, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                    # W = (1.0 / (Sv + 1.0)).astype(np.float32)
+                    W = Sv / 255.0
+                    q, root = BTPD_WTSE(S, m, W)
+                    leaves = root.get_leaves()
+                    groups = []
+                    for leaf in leaves:
+                        index = leaf.get_data()['index']
+                        pixels = org_S[index]
+                        pixels = np.reshape(pixels, newshape=(len(pixels), 3))
+                        groups.append(pixels)
+                    dict = {'palette': q,
+                            'groups': groups,
+                            'tmp_sm': Sv_map}
+                    return dict
+
+                SAVE = 'PreQuantize_m{}_{}_L{}'.format(m, dir, lim)
+                CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
+                         view_distribution=True, save_tmpSM=True)
+
+
+def CIQ_test_BTPD_PreQuantizeandSVcount(M=[16], DIR=['sumple_img'], PRE_Q=[256]):
+    for dir in DIR:
+        for m in M:
+            for pre_q in PRE_Q:
+                code = cv2.COLOR_BGR2LAB
+                inverse_code = cv2.COLOR_LAB2BGR
+
+                def ciq(img):
+                    trans_img = cv2.cvtColor(img, code)
+                    org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                    S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+
+                    # pre quantize
+                    q, root = BTPD(S, pre_q)
+                    mapped = mapping_pallet_to_img(trans_img, q)
+                    # SM count in each colors
+                    _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
+                    Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32)
+                    S = np.reshape(mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                    uniq_S = np.unique(S, axis=0)
+                    uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]] / 512) for color in uniq_S]).astype(np.uint16)
+                    # uniq_Sv = []
+                    # for color in uniq_S:
+                    #     index = np.where(color == S)
+                    #     pickup_sv = Sv[index]
+                    #     uniq_Sv.append(np.sum(pickup_sv))
+                    # tile_Sv = np.array([np.tile(color, (sv, 1)) for color, sv in zip(uniq_S, uniq_Sv)]).flatten()
+                    tile_Sv = []
+                    for color, sv in zip(uniq_S, uniq_Sv):
+                        tile_Sv.extend(np.tile(color, (sv, 1)))
+                    tile_Sv = np.array(tile_Sv)
+                    tile_S = np.reshape(tile_Sv, newshape=(len(tile_Sv), 1, 3))
+                    print('pre quantize {} colors'.format(len(root.get_leaves())))
+
+                    # W = (1.0 / (Sv + 1.0)).astype(np.float32)
+                    W = Sv
+                    q, root = BTPD(tile_S, m)
+                    leaves = root.get_leaves()
+                    groups = []
+                    for leaf in leaves:
+                        index = leaf.get_data()['index']
+                        pixels = tile_S[index]
+                        pixels = np.reshape(pixels, newshape=(len(pixels), 3))
+                        groups.append(pixels)
+                    dict = {'palette': q,
+                            'groups': groups,
+                            'tmp_sm': Sv_map}
+                    return dict
+
+                SAVE = 'PreQuantizeSVcount_m{}_{}_q{}'.format(m, dir, pre_q)
+                CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
+                         view_distribution=True, save_tmpSM=True)
 
 
 def mapping_pallet_to_img(img, pallete):
@@ -885,6 +1011,7 @@ def mapping_pallet_to_img(img, pallete):
 
     pal = np.argmin(dists, axis=2)
     mapped_img = pallete[pal].astype(np.uint8)
+    mapped_img = np.reshape(mapped_img, newshape=(img.shape[0], img.shape[1], 3))
 
     return mapped_img
 
@@ -896,7 +1023,9 @@ if __name__ == '__main__':
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
+    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
+    CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'])
+    # CIQ_test_BTPD_PreQuantize(M=[16, 32, 64], DIR=['sumple_img'])
     # CIQ_test_BTPD_PaletteDeterminationFromSv(M=[16, 32, 64], DIR=['sumple_img'])
     # CIQ_test_BTPD_includingSv(M=[16, 32, 64], DIR=['sumple_img'])
     # CIQ_test_BTPD_withSv(M=[16, 32, 64], DIR=['sumple_img'])

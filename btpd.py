@@ -548,7 +548,7 @@ def BTPD_InitializationFromSv(S, M, Sv, weights):
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette
+    return color_palette, root
 
 
 def BTPD_InitializationFromIncludingSv(S, M, Sv, weights):

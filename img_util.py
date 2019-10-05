@@ -4,6 +4,8 @@ import numpy as np
 import pySaliencyMap
 import matplotlib.pyplot as plt
 import pandas as pd
+from skimage.measure import compare_nrmse, compare_psnr
+from sklearn.metrics import mean_squared_error
 
 
 def get_surf_point(img):
@@ -96,6 +98,13 @@ def get_saliency_hist(img, sm='FineGrained'):
     return hist, bins, saliency_map
 
 
+def compare_labmse(img1, img2):
+    img1_lab = cv2.cvtColor(img1, cv2.COLOR_BGR2Lab)
+    img2_lab = cv2.cvtColor(img2, cv2.COLOR_BGR2Lab)
+
+    return compare_nrmse(img1_lab, img2_lab)
+
+
 def get_saliency_upper_th(img, R, sm='FineGrained'):
     hist, bins, sm = get_saliency_hist(img, sm=sm)
     th = int(R * np.sum(hist))
@@ -136,6 +145,19 @@ def get_saliency_lower_th(img, R, sm='FineGrained'):
         if count >= th:
             break
     return np.array(extract), np.array(extract_partition), zeros
+
+
+def mapping_pallet_to_img(img, pallete):
+    dists = np.empty(shape=(img.shape[0], img.shape[1], len(pallete)))
+    for num, pal in enumerate(pallete):
+        dist = np.linalg.norm(img - pal, axis=2)
+        dists[:, :, num] = dist
+
+    pal = np.argmin(dists, axis=2)
+    mapped_img = pallete[pal].astype(np.uint8)
+    mapped_img = np.reshape(mapped_img, newshape=(img.shape[0], img.shape[1], 3))
+
+    return mapped_img
 
 
 def make_colormap(colors, width=256):

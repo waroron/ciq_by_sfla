@@ -973,8 +973,8 @@ def Ueda_CIQ(S, M, Sv):
         weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
         weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
         weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
-        n_index_in_S = data['index'][c_2n_index]
-        n1_index_in_S = data['index'][c_2n1_index]
+        n_index_in_S = data['index'][c_2n_index[0]]
+        n1_index_in_S = data['index'][c_2n1_index[0]]
 
         left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
                                                                    sv_2n1, weighted_r_2n1, weighted_m_2n1,

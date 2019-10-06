@@ -429,7 +429,7 @@ def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint32)
                 org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint32)
-                _, __, Sv_map = get_saliency_hist(img, sm='SR')
+                _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
                 Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float64)
                 # Sv = 1.0 / (Sv + 1.0)
                 # Sv = (255.0 - Sv) / 255.0
@@ -447,7 +447,7 @@ def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img']):
                         'groups': groups,
                         'tmp_sm': Sv_map}
                 return dict
-            SAVE = 'fastBTPD_withSv_bySR_M{}_{}_LAB'.format(m, dir)
+            SAVE = 'BTPD_WTSE_M{}_{}_LAB'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
                      view_distribution=True)
 
@@ -577,12 +577,13 @@ def CIQ_test_BTPD_PreQuantize(M=[16], DIR=['sumple_img'], LIMIT=[1000], weightin
                     trans_img = cv2.cvtColor(img, code)
                     org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                     S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                    Sv = np.reshape(img, newshape=(len(S), 1, 1)).astype(np.float32)
+                    _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
+                    Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32)
 
                     # pre quantize
                     if weighting:
-                        q, root = BTPD_WTSE_LimitationSv(S, Sv, lim)
-                    else
+                        q, root = BTPD_WTSE_LimitationSv(S, Sv / 255.0, lim)
+                    else:
                         q, root = BTPD_LimitationSv(S, lim)
                     mapped = mapping_pallet_to_img(trans_img, q)
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
@@ -605,7 +606,7 @@ def CIQ_test_BTPD_PreQuantize(M=[16], DIR=['sumple_img'], LIMIT=[1000], weightin
                             'tmp_sm': Sv_map}
                     return dict
 
-                SAVE = 'PreQuantize_m{}_{}_L{}'.format(m, dir, lim)
+                SAVE = 'PreQuantizeW_m{}_{}_L{}_LAB'.format(m, dir, lim)
                 CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
                          view_distribution=True, save_tmpSM=True)
 
@@ -692,17 +693,18 @@ def CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16], DIR=['sumple_img'], LIMIT=[300
                         trans_img = cv2.cvtColor(img, code)
                         org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                         S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                        _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
+                        Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32)
 
                         # pre quantize
-                        q, root = BTPD_LimitationSv(S, lim)
-                        print('pre quantize {} colors'.format(len(root.get_leaves())))
+                        q, root = BTPD_WTSE_LimitationSv(S, Sv / 256.0, lim)
                         mapped = mapping_pallet_to_img(trans_img, q)
                         # SM count in each colors
                         _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
                         Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32)
                         S = np.reshape(mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                         uniq_S = np.unique(S, axis=0)
-                        uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]] / div) for color in uniq_S])
+                        uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]] / div) for color in uniq_S]).astype(np.int)
                         tile_Sv = []
                         for color, sv in zip(uniq_S, uniq_Sv):
                             tile_Sv.extend(np.tile(color, (sv, 1)))
@@ -726,7 +728,7 @@ def CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16], DIR=['sumple_img'], LIMIT=[300
                                 'tmp_sm': Sv_map}
                         return dict
 
-                    SAVE = 'PreQuantizeSVcount_m{}_{}_lim{}_div{}_2'.format(m, dir, lim, div)
+                    SAVE = 'MyPreQuantizeSVcountW_m{}_{}_lim{}_div{}'.format(m, dir, lim, div)
                     CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
                              view_distribution=True, save_tmpSM=True, view_importance=False)
 
@@ -738,12 +740,12 @@ if __name__ == '__main__':
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000, 4000], DIV=[128, 256, 512])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],
     #                                     DIV=[128, 256, 512])
-    # CIQ_test_BTPD_PreQuantize(M=[16, 32, 64], DIR=['sumple_img', 'misc'], LIMIT=[500, 1000, 2000, 3000])
+    # CIQ_test_BTPD_PreQuantize(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000, 4000], weighting=True)
     # CIQ_test_BTPD_PaletteDeterminationFromSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_includingSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    CIQ_test_BTPD_withSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    # CIQ_test_BTPD_withSv(M=[16, 32], DIR=['sumple_img'])
     # CIQ_test_BTPD_InitializationSv(M=[16, 32, 64], DIR=['sumple_img'])
     # CIQ_test_BTPD_InitializationFromIncludingSv(M=[16, 32, 64], DIR=['sumple_img'])

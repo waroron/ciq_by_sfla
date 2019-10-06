@@ -284,7 +284,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
             def ciq(img):
                 trans_img = cv2.cvtColor(img, code)
                 org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 q, root = BTPD(S, m)
                 leaves = root.get_leaves()
                 groups = []
@@ -300,8 +300,8 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
                         'groups': groups}
                 return dict
 
-            SAVE = 'fastBTPD_M{}_{}_BGR'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=False, code=code, inverse_code=code_inverse,
+            SAVE = 'fastBTPD_M{}_{}_LAB'.format(m, dir)
+            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse,
                      view_distribution=True)
 
 
@@ -426,5 +426,6 @@ def CIQ_test_besed_on_SM():
 
 
 if __name__ == '__main__':
+    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
     CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

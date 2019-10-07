@@ -714,7 +714,7 @@ def CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16], DIR=['sumple_img'], LIMIT=[300
 
                         # W = (1.0 / (Sv + 1.0)).astype(np.float32)
                         W = Sv
-                        q, root = BTPD(tile_S, m)
+                        q, root = BTPD(uniq_S, m)
                         leaves = root.get_leaves()
                         groups = []
                         for leaf in leaves:
@@ -740,7 +740,7 @@ if __name__ == '__main__':
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000, 4000], DIV=[128, 256, 512])
+    CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],
     #                                     DIV=[128, 256, 512])
     # CIQ_test_BTPD_PreQuantize(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000, 4000], weighting=True)

@@ -391,7 +391,7 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
             def ciq(img):
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(img, sm='SR')
-                Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32)
+                Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
                 q, root = Ueda_CIQ(S, m, Sv)
                 leaves = root.get_leaves()
                 groups = []
@@ -405,7 +405,7 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
                         'tmp_sm': Sv_map}
                 return dict
 
-            SAVE = 'Ueda_M{}_{}_Lab'.format(m, dir)
+            SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
             CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=True)
 
 

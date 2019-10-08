@@ -905,17 +905,19 @@ def SMBW_BTPD(S, Sv, M, M0=0.8, R=2):
 def Weighted_PCA(X, W):
     A = np.zeros(shape=(3, 3))
     sum_w = np.sum(W)
-    X_ = np.multiply(W, X) / sum_w
+    X_ = np.sum(np.multiply(W, X), axis=0) / sum_w
     W = np.reshape(W, newshape=(len(W)))
     for i in range(3):
         for j in range(3):
-            tmp = (X[:, i] - X_[:, j]).astype(np.float32)
-            A[i, j] = np.dot(W[:], tmp) / sum_w
+            tmp = np.multiply((X[:, i] - X_[j]), (X[:, j] - X_[i])).astype(np.float32)
+            A[i, j] = np.dot(W, tmp) / sum_w
 
     W, v = np.linalg.eig(A)
     ev = np.max(W)
     e = v[np.argmax(W)]
-    return ev * len(X), np.dot((X - X_), e)
+    l = ev * len(X)
+    dl = np.dot((X - X_), e)
+    return l, dl
 
 
 def Ueda_CIQ(S, M, Sv):
@@ -924,41 +926,44 @@ def Ueda_CIQ(S, M, Sv):
     Sv = np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)
 
     # クラス番号の割り当て
-    class_labels = np.zeros(shape=(Sv.shape))
-    for n in range(M):
+    class_labels = np.zeros(shape=len(S))
+    for n in range(M - 1):
         # 分割対象クラスの決定
         current_l = 0
-        index = np.where(class_labels == current_l)[0]
-        current_S = S[index]
-        current_Sv = Sv[index]
-        max_val, dl = Weighted_PCA(S[index], Sv[index])
+        current_index = np.where(class_labels == current_l)[0]
+        current_S = S[current_index]
+        current_Sv = Sv[current_index]
+        max_val, dl = Weighted_PCA(current_S, current_Sv)
         if n > 0:
-            for l in range(1, n):
+            for l in range(1, n + 1):
                 index = np.where(class_labels == l)[0]
                 val, tmp_dl = Weighted_PCA(S[index], Sv[index])
                 if max_val < val:
-                    current_S = S[index]
+                    current_index = index
                     current_Sv = Sv[index]
+                    current_l = l
                     max_val = val
                     dl = tmp_dl
 
         # 大津の線形判別
         current_Sv = current_Sv / np.sum(current_Sv)
         sorted_dl_index = np.argsort(dl)
-        sorted_index = index[sorted_dl_index]
-        sorted_dl = np.reshape(dl[sorted_dl_index], newshape=(len(sorted_dl_index), 1)).astype(np.float32)
-        sorted_w = np.reshape(current_Sv[sorted_dl_index], newshape=(len(sorted_dl), 1)).astype(np.float32)
+        sorted_index = current_index[sorted_dl_index]
+        N = len(dl)
+        sorted_dl = np.reshape(dl[sorted_dl_index], newshape=N).astype(np.float32)
+        sorted_w = np.reshape(current_Sv[sorted_dl_index], newshape=N).astype(np.float32)
 
-        cum1 = np.cumsum(sorted_dl)[:len(sorted_dl) - 1]         # cum1[i]: i番目までの顕著度の総和
-        cum2 = np.cumsum(sorted_dl[::-1])[:len(sorted_dl) - 1]   # cum2[::-1][i] i番目以降の顕著度の総和
-        w1_w2 = np.multiply(cum1, cum2[::-1])
+        cum1 = np.cumsum(sorted_w)[:N - 1]         # cum1[i]: i番目までの顕著度の総和
+        cum2 = np.cumsum(sorted_w[::-1])[:N - 1][::-1]   # cum2[i] i番目以降の顕著度の総和
+        w1_w2 = np.multiply(cum1, cum2)
         tmp = np.multiply(sorted_dl, sorted_w)
+        tmp = np.cumsum(tmp)[:N - 1]
         m1 = tmp / cum1
-        m2 = tmp / cum2[::-1]
+        m2 = tmp / cum2
 
-        tmp = (m1 - m2) ** 2
-        g = np.multiply(w1_w2, tmp)
-        d = np.argmax(g) + 1
+        tmp2 = (m1 - m2)
+        g = np.multiply(w1_w2, np.power(tmp2, 2))
+        d = np.argmax(g)
 
         sorted_index1 = sorted_index[:d]
         sorted_index2 = sorted_index[d:]
@@ -966,5 +971,11 @@ def Ueda_CIQ(S, M, Sv):
         class_labels[sorted_index1] = current_l
         class_labels[sorted_index2] = n + 1
 
-    return class_labels
+    q = []
+    for n in range(M):
+        index = np.where(class_labels == n)
+        index_S = S[index]
+        represent = np.mean(index_S, axis=0).astype(np.int)
+        q.append(represent)
+    return np.array(q)
 

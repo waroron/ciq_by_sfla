@@ -55,7 +55,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
             if view_importance:
                 importance = dict['importance']
 
-        except np.linalg.LinAlgError:
+        except KeyError:
             print('LinAlgError in {}'.format(img_path))
             continue
         # except ValueError as me:

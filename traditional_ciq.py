@@ -407,27 +407,19 @@ def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
 def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
     for dir in DIR:
         for m in M:
-
+            code = cv2.COLOR_BGR2LAB
+            inverse_code = cv2.COLOR_LAB2BGR
             def ciq(img):
+                trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
-                _, __, Sv_map = get_saliency_hist(img, sm='SR')
+                _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
                 Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
                 q = Ueda_CIQ(S, m, Sv)
-
-                # leaves = root.get_leaves()
-                # groups = []
-                # for leaf in leaves:
-                #     index = leaf.get_data()['index']
-                #     pixels = S[index]
-                #     pixels = np.reshape(pixels, newshape=(len(pixels), 3))
-                #     groups.append(pixels)
-                # dict = {'palette': q,
-                #         'groups': groups,
-                #         'tmp_sm': Sv_map}
+                dict = {'palette': q}
                 return dict
 
             SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=True)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=False)
 
 
 def CIQ_test_besed_on_SM():

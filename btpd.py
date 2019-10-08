@@ -902,93 +902,67 @@ def SMBW_BTPD(S, Sv, M, M0=0.8, R=2):
     return color_palette
 
 
+def Weighted_PCA(X, W):
+    A = np.zeros(shape=(3, 3))
+    sum_w = np.sum(W)
+    X_ = np.multiply(W, X) / sum_w
+    for i in range(3):
+        for j in range(3):
+            tmp = X[:, :, i] - X_[:, :, j]
+            A[i, j] = np.multiply(W, tmp) / sum_w
+
+    W, v = np.linalg.eig(A)
+    ev = np.max(W)
+    e = v[np.argmax(W)]
+    return ev * len(X), (X - X_) * e
+
+
 def Ueda_CIQ(S, M, Sv):
     # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
     Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
-    pre_m = np.array([w * s for s, w in zip(S, Sv)])
-    pre_R = np.array([m * s.T for m, s in zip(pre_m, S)])
-    pre_m = np.reshape(pre_m, newshape=(len(S), 1, 3))
-    pre_R = np.reshape(pre_R, newshape=(len(S), 3, 3))
 
-    params = get_params_with_weight(S, Sv, pre_R, pre_m, index=np.array([n for n in range(len(S))]))
-    root = RootNode(parent=None, data=params)
-    palette = []
-    for num in range(M - 1):
-        leaves = root.set_leaves()
-        max_ev = leaves[0].get_data()['max_ev']
-        current_node = leaves[0]
-        for leaf in leaves[1:]:
-            params = leaf.get_data()
-            ev = params['max_ev']
-            if max_ev < ev:
-                current_node = leaf
-                max_ev = ev
+    # クラス番号の割り当て
+    class_labels = np.zeros(shape=(Sv.shape))
+    for n in range(M):
+        # 分割対象クラスの決定
+        current_l = 0
+        index = np.where(class_labels == current_l)[0]
+        current_S = S[index]
+        current_Sv = Sv[index]
+        max_val, dl = Weighted_PCA(S[index], Sv[index])
+        if n > 0:
+            for l in range(1, n):
+                index = np.where(class_labels == l)[0]
+                val, tmp_dl = Weighted_PCA(S[index], Sv[index])
+                if max_val < val:
+                    current_S = S[index]
+                    current_Sv = Sv[index]
+                    max_val = val
+                    dl = tmp_dl
 
-        data = current_node.get_data()
-        current_S = data['S']
-        current_Sv = data['Sv']
-        current_wr = data['weighted_r']
-        current_wm = data['weighted_m']
-        current_q = data['q']
-        current_e = data['e']
+        # 大津の線形判別
+        current_Sv = current_Sv / np.sum(current_Sv)
+        sorted_dl_index = np.argsort(dl)
+        sorted_index = index[sorted_dl_index]
+        sorted_dl = dl[sorted_dl_index]
+        sorted_w = current_Sv[sorted_dl_index]
 
-        # Otsuの線形判別分析法
-        s_q = (current_S - current_q)
-        d = np.dot(s_q, current_e)
-        g_arr = np.array([w * s for s, w in zip(current_Sv, d)])
-        c_2n_index = None
-        c_2n1_index = None
-        max_d = 0
-        for n, dl in enumerate(d):
-            w1_index = np.where(dl >= d)
-            w1 = np.sum(d[w1_index])
-            m1 = g_arr[w1_index].mean()
-            w2_index = np.where(dl < d)
-            w2 = np.sum(d[w2_index])
-            m2 = g_arr[w2_index].mean()
-            current_d = w1 * w2 * ((m1 - m2) ** 2)
+        cum1 = np.cumsum(sorted_dl)         # cum1[i]: i番目までの顕著度の総和
+        cum2 = np.cumsum(sorted_dl[::-1])   # cum2[::-1][i] i番目以降の顕著度の総和
+        w1_w2 = np.multiply(cum1, cum2[::-1])
+        tmp = np.matmul(sorted_dl, sorted_w)
+        m1 = tmp / cum1
+        m2 = tmp / cum2[::-1]
 
-            if max_d < current_d:
-                c_2n_index = w1_index
-                c_2n1_index = w2_index
-                max_d = current_d
-        print(num)
+        g = np.multiply(w1_w2, (m1 - m2) ** 2)
+        d = np.argmax(g)
 
-        num_c2n = len(c_2n_index[0])
-        num_c2n1 = len(c_2n1_index[0])
+        sorted_index1 = sorted_index[:d]
+        sorted_index2 = sorted_index[d:]
 
-        if num_c2n1 <= 0:
-            # 分割できない
-            # 分散が相当低いはずなので，本来選ばれるはずのない状態
-            print('could not separate the extraction')
-            break
+        class_labels[sorted_index1] = current_l
+        class_labels[sorted_index2] = n + 1
 
-        # 現ノードから子の作成
-        c_2n = np.reshape(current_S[c_2n_index[0]], (num_c2n, 1, 3))
-        c_2n1 = np.reshape(current_S[c_2n1_index[0]], (num_c2n1, 1, 3))
-        sv_2n = np.reshape(current_Sv[c_2n_index[0]], (num_c2n, 1))
-        sv_2n1 = np.reshape(current_Sv[c_2n1_index[0]], (num_c2n1, 1))
-        weighted_r_2n = np.reshape(current_wr[c_2n_index[0]], (num_c2n, 3, 3))
-        weighted_m_2n = np.reshape(current_wm[c_2n_index[0]], (num_c2n, 1, 3))
-        weighted_r_2n1 = np.reshape(current_wr[c_2n1_index[0]], (num_c2n1, 3, 3))
-        weighted_m_2n1 = np.reshape(current_wm[c_2n1_index[0]], (num_c2n1, 1, 3))
-        n_index_in_S = data['index'][c_2n_index[0]]
-        n1_index_in_S = data['index'][c_2n1_index[0]]
+    return class_labels
 
-        left_params, right_params = get_params_for_bst_with_weight(c_2n, c_2n1, sv_2n, weighted_r_2n, weighted_m_2n,
-                                                                   sv_2n1, weighted_r_2n1, weighted_m_2n1,
-                                                                   n_index_in_S, n1_index_in_S)
-        right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
-        left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
-        current_node.set_right(right=right)
-        current_node.set_left(left=left)
-
-    leaves = root.set_leaves()
-    for leaf in leaves:
-        params = leaf.get_data()
-        palette.append(params['q'])
-
-    palette = np.array(palette)
-    color_palette = np.round(palette)
-    return color_palette, root

@@ -5,11 +5,12 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from proposal import CIQ_test
-from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th
+from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil
 from skimage.measure import compare_nrmse, compare_psnr
 import pandas as pd
 import os
 import time
+from mediancut import median_cut
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -349,13 +350,32 @@ def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
             code_inverse = cv2.COLOR_Lab2BGR
 
             def ciq(img):
-                img = cv2.cvtColor(img, code)
+                # img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 kmeans, q = KMeans_CIQ(S, m)
-                return kmeans.cluster_centers_
+                dict = {'palette': kmeans.cluster_centers_}
+                return dict
 
-            SAVE = 'KMeans_M{}_{}_Lab'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=True, code=code, inverse_code=code_inverse)
+            SAVE = 'KMeans_M{}_{}_RGB'.format(m, dir)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse)
+
+
+def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
+    for dir in DIR:
+        for m in M:
+            code = cv2.COLOR_BGR2Lab
+            code_inverse = cv2.COLOR_Lab2BGR
+
+            def ciq(img):
+                # img = cv2.cvtColor(img, code)
+                pilimg = cv2pil(img)
+                q = median_cut(pilimg, m)
+                cv_q = q[:, ::-1]
+                dict = {'palette': cv_q}
+                return dict
+
+            SAVE = 'MedianCut_M{}_{}_RGB'.format(m, dir)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse)
 
 
 def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
@@ -392,17 +412,18 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(img, sm='SR')
                 Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
-                q, root = Ueda_CIQ(S, m, Sv)
-                leaves = root.get_leaves()
-                groups = []
-                for leaf in leaves:
-                    index = leaf.get_data()['index']
-                    pixels = S[index]
-                    pixels = np.reshape(pixels, newshape=(len(pixels), 3))
-                    groups.append(pixels)
-                dict = {'palette': q,
-                        'groups': groups,
-                        'tmp_sm': Sv_map}
+                q = Ueda_CIQ(S, m, Sv)
+
+                # leaves = root.get_leaves()
+                # groups = []
+                # for leaf in leaves:
+                #     index = leaf.get_data()['index']
+                #     pixels = S[index]
+                #     pixels = np.reshape(pixels, newshape=(len(pixels), 3))
+                #     groups.append(pixels)
+                # dict = {'palette': q,
+                #         'groups': groups,
+                #         'tmp_sm': Sv_map}
                 return dict
 
             SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
@@ -428,4 +449,5 @@ def CIQ_test_besed_on_SM():
 if __name__ == '__main__':
     # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
     CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    # CIQ_test_MedianCut(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

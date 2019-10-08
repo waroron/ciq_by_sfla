@@ -906,21 +906,22 @@ def Weighted_PCA(X, W):
     A = np.zeros(shape=(3, 3))
     sum_w = np.sum(W)
     X_ = np.multiply(W, X) / sum_w
+    W = np.reshape(W, newshape=(len(W)))
     for i in range(3):
         for j in range(3):
-            tmp = X[:, :, i] - X_[:, :, j]
-            A[i, j] = np.multiply(W, tmp) / sum_w
+            tmp = (X[:, i] - X_[:, j]).astype(np.float32)
+            A[i, j] = np.dot(W[:], tmp) / sum_w
 
     W, v = np.linalg.eig(A)
     ev = np.max(W)
     e = v[np.argmax(W)]
-    return ev * len(X), (X - X_) * e
+    return ev * len(X), np.dot((X - X_), e)
 
 
 def Ueda_CIQ(S, M, Sv):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
-    Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
+    S = np.reshape(S, newshape=(len(S), 3)).astype(np.uint32)
+    Sv = np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)
 
     # クラス番号の割り当て
     class_labels = np.zeros(shape=(Sv.shape))
@@ -945,18 +946,19 @@ def Ueda_CIQ(S, M, Sv):
         current_Sv = current_Sv / np.sum(current_Sv)
         sorted_dl_index = np.argsort(dl)
         sorted_index = index[sorted_dl_index]
-        sorted_dl = dl[sorted_dl_index]
-        sorted_w = current_Sv[sorted_dl_index]
+        sorted_dl = np.reshape(dl[sorted_dl_index], newshape=(len(sorted_dl_index), 1)).astype(np.float32)
+        sorted_w = np.reshape(current_Sv[sorted_dl_index], newshape=(len(sorted_dl), 1)).astype(np.float32)
 
-        cum1 = np.cumsum(sorted_dl)         # cum1[i]: i番目までの顕著度の総和
-        cum2 = np.cumsum(sorted_dl[::-1])   # cum2[::-1][i] i番目以降の顕著度の総和
+        cum1 = np.cumsum(sorted_dl)[:len(sorted_dl) - 1]         # cum1[i]: i番目までの顕著度の総和
+        cum2 = np.cumsum(sorted_dl[::-1])[:len(sorted_dl) - 1]   # cum2[::-1][i] i番目以降の顕著度の総和
         w1_w2 = np.multiply(cum1, cum2[::-1])
-        tmp = np.matmul(sorted_dl, sorted_w)
+        tmp = np.multiply(sorted_dl, sorted_w)
         m1 = tmp / cum1
         m2 = tmp / cum2[::-1]
 
-        g = np.multiply(w1_w2, (m1 - m2) ** 2)
-        d = np.argmax(g)
+        tmp = (m1 - m2) ** 2
+        g = np.multiply(w1_w2, tmp)
+        d = np.argmax(g) + 1
 
         sorted_index1 = sorted_index[:d]
         sorted_index2 = sorted_index[d:]

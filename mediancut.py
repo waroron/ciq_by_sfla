@@ -1,5 +1,5 @@
 from PIL import Image
-
+import numpy as np
 from cube import ColorCube
 
 
@@ -26,8 +26,7 @@ def median_cut(image, num_colors):
         split_box = cubes[max_cube]
         cube_a, cube_b = split_box.split(max_dim)
         cubes = cubes[:max_cube] + [cube_a, cube_b] + cubes[max_cube + 1:]
-    import pdb; pdb.set_trace()
-    return [c.average for c in cubes]
+    return np.array([c.average for c in cubes]).astype(np.int)
 
 
 if __name__ == '__main__':

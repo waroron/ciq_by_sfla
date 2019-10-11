@@ -207,6 +207,23 @@ def make_colormap(colors, width=256):
     return color_map
 
 
+def get_importancemap(img):
+    lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
+
+    imp_img = np.zeros(shape=(img.shape[0], img.shape[1]))
+    sm = np.reshape(sm, newshape=(img.shape[0] * img.shape[1], 1)).astype(np.float32)
+    S = np.reshape(img,  newshape=(len(sm), 1, 3)).astype(np.uint64)
+    uniq_S = np.unique(S, axis=0)
+    importance = np.round([np.median(sm[np.where(color == S)[0]]) for color in uniq_S]).astype(np.int)
+
+    for color, imp in zip(uniq_S, importance):
+        index = np.where(color == img)
+        imp_img[index[:2]] = imp
+
+    return imp_img
+
+
 def get_numcolors(img):
     if len(img.shape) > 2:
         img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
@@ -298,6 +315,31 @@ def test_saliency_map():
                 pickup_sm[indices] = org_img[indices]
             cv2.imwrite(save_pickup, pickup_sm)
             print('save fig {}'.format(save_pickup))
+
+
+def test_importance_map():
+    DIR = 'sumple_img'
+    SAVE = 'Importance_Map'
+    imgs = os.listdir(DIR)
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs[8:16]):
+        path = os.path.join(DIR, img_path)
+        org_img = cv2.imread(path)
+        img = org_img.copy()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        root, ext = os.path.splitext(img_path)
+        img_dir = os.path.join(SAVE, root)
+
+        if not os.path.isdir(img_dir):
+            os.mkdir(img_dir)
+        # saliency mapの保存
+        saliency_map = get_importancemap(img)
+        save_path = os.path.join(img_dir, img_path)
+        cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
+        print('save Importance_Map map as img {}'.format(save_path))
 
 
 def test_sum_saluency():
@@ -407,5 +449,6 @@ if __name__ == '__main__':
     # bmp2jpg()
     # test_sum_saluency()
     # test_smextraction()
-    test_saliency_map()
+    test_importance_map()
+    # test_saliency_map()
     # test_sm_variance()

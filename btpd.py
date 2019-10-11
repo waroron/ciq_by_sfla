@@ -965,6 +965,16 @@ def Ueda_CIQ(S, M, Sv):
         g = np.multiply(w1_w2, np.power(tmp2, 2))
         d = np.argmax(g)
 
+        if d == 0:
+            q = []
+            for n in range(M):
+                index = np.where(class_labels == n)
+                index_S = S[index]
+                represent = np.mean(index_S, axis=0).astype(np.int)
+                q.append(represent)
+            print('d == 0:  {} colors CIQ'.format(n))
+            return np.array(q)
+
         sorted_index1 = sorted_index[:d]
         sorted_index2 = sorted_index[d:]
 

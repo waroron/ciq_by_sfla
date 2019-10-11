@@ -301,9 +301,9 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
                         'groups': groups}
                 return dict
 
-            SAVE = 'fastBTPD_M{}_{}_LAB'.format(m, dir)
+            SAVE = 'BTPD_M{}_{}_LAB'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse,
-                     view_distribution=True)
+                     view_distribution=False, importance_flag=True)
 
 
 def CIQ_test_PSO():
@@ -375,7 +375,7 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
                 return dict
 
             SAVE = 'MedianCut_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse, importance_flag=True)
 
 
 def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
@@ -413,13 +413,13 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
-                Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
+                Sv = np.reshape((Sv_map + 1) / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
                 q = Ueda_CIQ(S, m, Sv)
                 dict = {'palette': q}
                 return dict
 
             SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=False)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=False, importance_flag=True)
 
 
 def CIQ_test_besed_on_SM():
@@ -439,7 +439,7 @@ def CIQ_test_besed_on_SM():
 
 
 if __name__ == '__main__':
-    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    # CIQ_test_MedianCut(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    CIQ_test_BTPD(M=[32], DIR=['sumple_img'])
+    CIQ_test_Ueda(M=[32], DIR=['sumple_img'])
+    CIQ_test_MedianCut(M=[32], DIR=['sumple_img'])
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

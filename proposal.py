@@ -852,6 +852,56 @@ def CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16], DIR=['sumple_img'], LIMIT=[3000
                              view_distribution=True, save_tmpSM=True, view_importance=False, importance_flag=True)
 
 
+def CIQ_test_BTPD_WithImpoertance(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
+    """
+    重要度を，合計顕著度ではなく，その色の中で最大の顕著度とする
+    :param M:
+    :param DIR:
+    :param PRE_Q:
+    :param DIV:
+    :return:
+    """
+    for dir in DIR:
+        for m in M:
+            for lim in LIMIT:
+                    code = cv2.COLOR_BGR2LAB
+                    inverse_code = cv2.COLOR_LAB2BGR
+
+                    def ciq(img):
+                        trans_img = cv2.cvtColor(img, code)
+                        # trans_img = img.copy()
+                        org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                        S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                        _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
+                        Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
+
+                        # pre quantize
+                        q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
+                        mapped = mapping_pallet_to_img(trans_img, q)
+                        # SM count in each colors
+                        _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
+                        Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
+                        S = np.reshape(mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                        uniq_S = np.unique(S, axis=0)
+                        uniq_Sv = [np.sum(Sv[np.where(color == S)[0]])for color in uniq_S]
+
+                        # scaling Sv between 0 and 1 as weight of BTPD
+                        uniq_Sv = (uniq_Sv / np.max(uniq_Sv)).astype(np.float32)
+                        print('pre quantize {} colors'.format(len(root.get_leaves())))
+
+                        q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
+
+                        # importances = uniq_S[np.argsort(uniq_Sv)]
+                        dict = {'palette': q,
+                                'groups': groups,
+                                'tmp_sm': Sv_map}
+                        return dict
+
+                    SAVE = 'BTPD_WithImportance_m{}_{}_lim{}_LAB'.format(m, dir, lim)
+                    CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
+                             view_distribution=False, save_tmpSM=True, view_importance=False, importance_flag=False)
+
+
 def CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[512]):
     """
     事前量子化なしで，合計顕著度を算出する
@@ -907,7 +957,8 @@ if __name__ == '__main__':
     # CIQ_test_sup2()
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
-    CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16, 32, 64], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
+    # CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16, 32, 64], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

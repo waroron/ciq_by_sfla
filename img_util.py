@@ -181,24 +181,19 @@ def mapping_pallet_to_img(img, pallete):
     return mapped_img
 
 
-def make_colormap(colors, width=256):
-    limit = int(np.sqrt(width))
-
-    # 各色の幅の決定
-    for n in range(limit):
-        if len(colors) <= n ** 2:
-            color_width = int(width / n)
-            break
+def make_colormap(colors, color_width=64):
+    width_n_colors = int(np.sqrt(len(colors)) + 0.5)
+    map_width = width_n_colors * color_width
 
     # カラーマップの生成
-    color_map = np.zeros(shape=(width, width, 3))
+    color_map = np.zeros(shape=(map_width, map_width, 3))
     i, j = 0, 0
     for color in colors:
         x = int(i * color_width)
         y = int(j * color_width)
         color_map[y: y + color_width, x: x + color_width] = color
 
-        if i >= width / color_width - 1:
+        if i >= map_width / color_width - 1:
             i = 0
             j += 1
         else:

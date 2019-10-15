@@ -239,13 +239,15 @@ def BTPD(S, M):
         current_node.set_left(left=left)
 
     leaves = root.set_leaves()
+    groups = []
     for leaf in leaves:
         params = leaf.get_data()
+        groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root
+    return color_palette, root, np.array(groups)
 
 
 def BTPD_LimitationSv(S, limit):
@@ -302,13 +304,15 @@ def BTPD_LimitationSv(S, limit):
         num += 1
 
     leaves = root.set_leaves()
+    groups = []
     for leaf in leaves:
         params = leaf.get_data()
+        groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root
+    return color_palette, root, np.array(groups)
 
 
 def BTPD_WTSE(S, M, Sv):
@@ -375,13 +379,15 @@ def BTPD_WTSE(S, M, Sv):
         current_node.set_left(left=left)
 
     leaves = root.set_leaves()
+    groups = []
     for leaf in leaves:
         params = leaf.get_data()
+        groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root
+    return color_palette, root, np.array(groups)
 
 
 def BTPD_WTSE_LimitationSv(S, Sv, limit):
@@ -445,13 +451,15 @@ def BTPD_WTSE_LimitationSv(S, Sv, limit):
         current_node.set_left(left=left)
 
     leaves = root.set_leaves()
+    groups = []
     for leaf in leaves:
         params = leaf.get_data()
+        groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root
+    return color_palette, root, np.array(groups)
 
 
 def BTPD_PaletteDeterminationFromSV(S, M, Sv):
@@ -909,20 +917,20 @@ def Weighted_PCA(X, W):
     W = np.reshape(W, newshape=(len(W)))
     for i in range(3):
         for j in range(3):
-            tmp = np.multiply((X[:, i] - X_[j]), (X[:, j] - X_[i])).astype(np.float32)
+            tmp = np.multiply((X[:, i] - X_[i]), (X[:, j] - X_[j])).astype(np.float32)
             A[i, j] = np.dot(W, tmp) / sum_w
 
     W, v = np.linalg.eig(A)
     ev = np.max(W)
     e = v[np.argmax(W)]
-    l = ev * len(X)
+    l = ev * sum_w
     dl = np.dot((X - X_), e)
     return l, dl
 
 
 def Ueda_CIQ(S, M, Sv):
     # precalc
-    S = np.reshape(S, newshape=(len(S), 3)).astype(np.uint32)
+    S = np.reshape(S, newshape=(len(S), 3)).astype(np.int32)
     Sv = np.reshape(Sv, newshape=(len(S), 1)).astype(np.float32)
 
     # クラス番号の割り当て
@@ -982,10 +990,12 @@ def Ueda_CIQ(S, M, Sv):
         class_labels[sorted_index2] = n + 1
 
     q = []
+    groups = []
     for n in range(M):
         index = np.where(class_labels == n)
         index_S = S[index]
+        groups.append(index_S)
         represent = np.mean(index_S, axis=0).astype(np.int)
         q.append(represent)
-    return np.array(q)
+    return np.array(q), groups
 

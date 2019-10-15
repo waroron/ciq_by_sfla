@@ -284,26 +284,15 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
 
             def ciq(img):
                 trans_img = cv2.cvtColor(img, code)
-                org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                q, root = BTPD(S, m)
-                leaves = root.get_leaves()
-                groups = []
-                sv = []
-                for leaf in leaves:
-                    data = leaf.get_data()
-                    index = data['index']
-                    sv.append(data['max_ev'])
-                    pixels = org_S[index]
-                    pixels = np.reshape(pixels, newshape=(len(pixels), 3))
-                    groups.append(pixels)
+                q, root, groups = BTPD(S, m)
                 dict = {'palette': q,
                         'groups': groups}
                 return dict
 
             SAVE = 'BTPD_M{}_{}_LAB'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse,
-                     view_distribution=False, importance_flag=True)
+                     view_distribution=True, importance_flag=True)
 
 
 def CIQ_test_PSO():
@@ -413,13 +402,15 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
-                Sv = np.reshape((Sv_map + 1) / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
-                q = Ueda_CIQ(S, m, Sv)
-                dict = {'palette': q}
+                Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
+                Sv += 1e-8
+                q, groups = Ueda_CIQ(S, m, Sv)
+                dict = {'palette': q,
+                        'groups': groups}
                 return dict
 
             SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=0, inverse_code=0, view_distribution=False, importance_flag=True)
+            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=inverse_code, view_distribution=True, importance_flag=True)
 
 
 def CIQ_test_besed_on_SM():
@@ -439,7 +430,7 @@ def CIQ_test_besed_on_SM():
 
 
 if __name__ == '__main__':
-    CIQ_test_BTPD(M=[32], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[32], DIR=['sumple_img'])
-    CIQ_test_MedianCut(M=[32], DIR=['sumple_img'])
+    CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
+    # CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
+    # CIQ_test_MedianCut(M=[32], DIR=['sumple_img'])
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

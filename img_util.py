@@ -83,7 +83,7 @@ def get_spectralresidual(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 255.0).astype(np.uint8)
+    return (saliencyMap * 1.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -320,7 +320,7 @@ def test_importance_map():
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
 
-    for num, img_path in enumerate(imgs[8:16]):
+    for num, img_path in enumerate(imgs[5:]):
         path = os.path.join(DIR, img_path)
         org_img = cv2.imread(path)
         img = org_img.copy()

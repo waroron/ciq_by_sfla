@@ -431,6 +431,6 @@ def CIQ_test_besed_on_SM():
 
 if __name__ == '__main__':
     CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
-    # CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
-    # CIQ_test_MedianCut(M=[32], DIR=['sumple_img'])
+    CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
+    CIQ_test_MedianCut(M=[16, 32, 64], DIR=['sumple_img'])
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

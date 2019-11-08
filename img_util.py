@@ -83,7 +83,7 @@ def get_spectralresidual(img):
     saliency = cv2.saliency.StaticSaliencyFineGrained_create()
     (success, saliencyMap) = saliency.computeSaliency(img)
     # versionによって255倍する必要あり
-    return (saliencyMap * 255.0).astype(np.uint8)
+    return (saliencyMap * 1.0).astype(np.uint8)
 
 
 def get_saliency_map(img):
@@ -444,6 +444,6 @@ if __name__ == '__main__':
     # bmp2jpg()
     # test_sum_saluency()
     # test_smextraction()
-    test_importance_map()
-    # test_saliency_map()
+    # test_importance_map()
+    test_saliency_map()
     # test_sm_variance()

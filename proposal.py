@@ -27,18 +27,18 @@ def CIEDE76(img1, img2):
     return dist
 
 
-def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.COLOR_BGR2Lab,
-             inverse_code=cv2.COLOR_Lab2BGR, view_distribution=False, save_tmpSM=False, view_importance=False,
-             importance_flag=False):
+def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
     DIR = test_img
     SAVE = test_name
     imgs = os.listdir(DIR)
-    INDICES = ['img_name', 'NRMSE', 'PSNR', 'Lab_NRMSE', 'SSIM',
-               'Top Dist(RGB)', 'Top Dist. 1%(RGB)', 'Top Dist(Lab)', 'Top Dist. 1%(Lab)',
-               'Top Dist. 1%(Sv RGB)', 'Top Dist. 1%(Sv Lab)', 'Top Dist. 10%(Sv RGB)', 'Top Dist. 10%(Sv Lab)',
-               'Top Dist. 20%(Sv RGB)', 'Top Dist. 20%(Sv Lab)', 'Top Dist. 30%(Sv RGB)', 'Top Dist. 30%(Sv Lab)',
-               'Top Dist. 1%(Importance RGB)', 'Top Dist. 1%(Importance Lab)', 'Top Dist. 10%(Importance RGB)', 'Top Dist. 10%(Importance Lab)',
-               'Running time']
+    trans_flag = test_config['trans_flag']
+    code = test_config['trans_code']
+    inverse_code = test_config['trans_inverse_code']
+    view_distribution = test_config['view_distribution']
+    save_tmpSM = test_config['save_tmpSM']
+    view_importance = test_config['view_importance']
+    importance_flag = test_config['importance_flag']
+    ciq_error_eval = test_config['ciq_error_eval']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -48,35 +48,27 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
         root, ext = os.path.splitext(img_path)
         save_path = os.path.join(SAVE, root)
         img = cv2.imread(path)
-        st = time.time()
         groups = None
         tmp_sm = None
         try:
+            st = time.time()
             dict = ciq(img)
+            en = time.time()
             palette = dict['palette']
             if view_distribution:
                 groups = dict['groups']
             if save_tmpSM:
                 tmp_sm = dict['tmp_sm']
-            if view_importance:
-                importance = dict['importance']
 
         except KeyboardInterrupt:
             print('LinAlgError in {}'.format(img_path))
             continue
-        # except ValueError as me:
-        #     print(me)
-        #     print('Error in : {}'.format(img_path))
-        #     continue
-
-        en = time.time()
 
         if trans_flag:
             luv_img = cv2.cvtColor(img, code)
             mapped = mapping_pallet_to_img(luv_img, palette)
             mapped = np.reshape(mapped, newshape=img.shape)
             mapped = cv2.cvtColor(mapped, inverse_code)
-            # palette = cv2.cvtColor(palette, code)
         else:
             mapped = mapping_pallet_to_img(img, palette)
         mapped = np.reshape(mapped, newshape=img.shape)
@@ -85,73 +77,41 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
             os.mkdir(save_path)
 
         # eval
-        nrmse = compare_nrmse(img, mapped)
-        psnr = compare_psnr(img, mapped)
-        lab_nrmse = compare_labmse(img, mapped)
-        ssim = compare_ssim(img, mapped, multichannel=True)
-
-        # Top Dist
-        rgb_mse = np.linalg.norm(img - mapped, axis=2).reshape((img.shape[0] * img.shape[1])) / 3.0
-        top_dist_rgb = np.max(rgb_mse)
-        sorted_rgbmse = np.sort(rgb_mse)[::-1]
-        top_dist_rgb_1 = np.mean(sorted_rgbmse[int(len(rgb_mse) * 0.99):])
-        top_dist_rgb_10 = np.mean(sorted_rgbmse[int(len(rgb_mse) * 0.90):])
-        top_dist_rgb_20 = np.mean(sorted_rgbmse[int(len(rgb_mse) * 0.80):])
-        top_dist_rgb_30 = np.mean(sorted_rgbmse[int(len(rgb_mse) * 0.70):])
-
-        lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-        lab_mapped = cv2.cvtColor(mapped, cv2.COLOR_BGR2Lab)
-        lab_mse = np.linalg.norm(lab_img - lab_mapped, axis=2).reshape((img.shape[0] * img.shape[1]))
-        top_dist_lab = np.max(lab_mse)
-        sorted_labmse = np.sort(lab_mse)[::-1]
-        top_dist_lab_1 = np.mean(sorted_labmse[int(len(lab_mse) * 0.99):])
-        top_dist_lab_10 = np.mean(sorted_labmse[int(len(lab_mse) * 0.90):])
-        top_dist_lab_20 = np.mean(sorted_labmse[int(len(lab_mse) * 0.80):])
-        top_dist_lab_30 = np.mean(sorted_labmse[int(len(lab_mse) * 0.70):])
-
-        # MSE in each saliency
-        rgb_sv_mse, luv_sv_mse = save_mse_in_eachSaliency(img, mapped, save_path, 'MSEinEachSaliency_' + root + '.jpg')
-        thresh_1 = int(len(rgb_sv_mse) * 0.99)
-        thresh_10 = int(len(rgb_sv_mse) * 0.90)
-        thresh_20 = int(len(rgb_sv_mse) * 0.80)
-        thresh_30 = int(len(rgb_sv_mse) * 0.70)
-        rgb_sv_mse[np.isnan(rgb_sv_mse)] = 0
-        luv_sv_mse[np.isnan(luv_sv_mse)] = 0
-        rgb_sv_mean_1 = np.mean(rgb_sv_mse[thresh_1:])
-        luv_sv_mean_1 = np.mean(luv_sv_mse[thresh_1:])
-        rgb_sv_mean_10 = np.mean(rgb_sv_mse[thresh_10:])
-        luv_sv_mean_10 = np.mean(luv_sv_mse[thresh_10:])
-        rgb_sv_mean_20 = np.mean(rgb_sv_mse[thresh_20:])
-        luv_sv_mean_20 = np.mean(luv_sv_mse[thresh_20:])
-        rgb_sv_mean_30 = np.mean(rgb_sv_mse[thresh_30:])
-        luv_sv_mean_30 = np.mean(luv_sv_mse[thresh_30:])
+        eval_array = []
+        eval_indices = []
+        for eval in ciq_error_eval:
+            eval_func = eval['eval_func']
+            eval_index = eval['eval_index']
+            score = eval_func(img, mapped)
+            eval_array.append(score)
+            eval_indices.append(eval_index)
 
         # Importance
         imp_mse_rgb_1 = 0
         imp_mse_rgb_10 = 0
-        imp_mse_luv_1 = 0
-        imp_mse_luv_10 = 0
         if importance_flag:
-            importance_img = get_img_importance(root)[:, :, 0]
-            lin_imp_img = np.reshape(importance_img, newshape=(img.shape[0] * img.shape[1]))
-            lin_imp_img = minmax_scale(lin_imp_img, (0, 255))
-            thresh_1 = int(np.max(lin_imp_img) * 0.99)
-            thresh_10 = int(np.max(lin_imp_img) * 0.9)
+            ...
+            # importance_img = get_img_importance(root)[:, :, 0]
+            # lin_imp_img = np.reshape(importance_img, newshape=(img.shape[0] * img.shape[1]))
+            # lin_imp_img = minmax_scale(lin_imp_img, (0, 255))
+            #
+            # for part in [.01, .05, .1]:
+            #     top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
+            #                     'eval_index': f'Top Dist {part * 100}%'}
+            #     top_dist_sv = {'eval_func': save_mse_in_eachSaliency,
+            #                    'eval_index': f'Top Dist Sv {part * 100}%'}
+            #
+            #     eval_list.extend([top_dist_rgb, top_dist_sv])
+            # thresh_1 = int(np.max(lin_imp_img) * 0.99)
+            # thresh_10 = int(np.max(lin_imp_img) * 0.9)
+            #
+            # index_1 = np.where(thresh_1 < lin_imp_img)
+            # index_10 = np.where(thresh_10 < lin_imp_img)
+            #
+            # imp_mse_rgb_1 = np.mean(rgb_mse[index_1])
+            # imp_mse_rgb_10 = np.mean(rgb_mse[index_10])
 
-            index_1 = np.where(thresh_1 < lin_imp_img)
-            index_10 = np.where(thresh_10 < lin_imp_img)
-
-            imp_mse_rgb_1 = np.mean(rgb_mse[index_1])
-            imp_mse_rgb_10 = np.mean(rgb_mse[index_10])
-            imp_mse_luv_1 = np.mean(lab_mse[index_1])
-            imp_mse_luv_10 = np.mean(lab_mse[index_10])
-
-        df = pd.DataFrame([[img_path, nrmse, psnr, lab_nrmse, ssim,
-                            top_dist_rgb, top_dist_rgb_1, top_dist_lab, top_dist_lab_1,
-                            rgb_sv_mean_1, luv_sv_mean_1, rgb_sv_mean_10, luv_sv_mean_10,
-                            rgb_sv_mean_20, luv_sv_mean_20, rgb_sv_mean_30, luv_sv_mean_30,
-                            imp_mse_rgb_1, imp_mse_rgb_10, imp_mse_luv_1, imp_mse_luv_10,
-                            en - st]], columns=INDICES)
+        df = pd.DataFrame([[img_path, en - st, *eval_array]], columns=['img_name', 'running time', *eval_indices])
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
 
         if num != 0:
@@ -190,39 +150,34 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', trans_flag=False, code=cv2.C
             pass
 
 
-def save_mse_in_eachSaliency(img, mapped, save_path, filename):
+def save_mse_in_eachSaliency(img, mapped, save_path=None, filename=None):
     lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
     rgb_mse_sv = np.zeros(shape=256)
-    luv_mse_sv = np.zeros(shape=256)
     for num in range(0, 256):
         position = np.where(sm == num)
         if len(position) == 0:
             continue
         # rgb_mse = (np.square(img[position] - mapped[position])).mean()
         rgb_mse = compare_nrmse(img[position], mapped[position])
-        luv_img = cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
-        luv_mapping = cv2.cvtColor(mapped, cv2.COLOR_BGR2LUV)
-        luv_mse = compare_nrmse(luv_img[position], luv_mapping[position])
         rgb_mse_sv[num] = rgb_mse
-        luv_mse_sv[num] = luv_mse
 
-    mse_saliency_path = os.path.join(save_path, filename)
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)  # 何もプロットしていないAxesでもAxisは自動的に作られる
-    ax.scatter(bins, rgb_mse_sv, c='red', label='RGB_MSE', marker='.')
-    ax.scatter(bins, luv_mse_sv, c='blue', label='LUV_MSE', marker='.')
-    ax.set_title("MSE in each saliency")
-    ax.set_xlabel("saliency")
-    ax.set_ylabel("mean of MSE")
-    ax.set_xlim([0, 255])
-    ax.set_ylim([0, 1])
-    ax.legend()
-    ax.grid()
-    plt.savefig(mse_saliency_path)
-    plt.close()
+    if save_path or filename:
+        mse_saliency_path = os.path.join(save_path, filename)
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)  # 何もプロットしていないAxesでもAxisは自動的に作られる
+        ax.scatter(bins, rgb_mse_sv, c='red', label='RGB_MSE', marker='.')
+        ax.set_title("MSE in each saliency")
+        ax.set_xlabel("saliency")
+        ax.set_ylabel("mean of MSE")
+        ax.set_xlim([0, 255])
+        ax.set_ylim([0, 1])
+        ax.legend()
+        ax.grid()
+        plt.savefig(mse_saliency_path)
+        plt.close()
 
-    return rgb_mse_sv, luv_mse_sv
+    return rgb_mse_sv
 
 
 def save_color_distribution(groups, save_path, filename):
@@ -427,6 +382,35 @@ def CIQ_test_sup4():
         return q
 
     CIQ_test(ciq, SAVE, DIR)
+
+
+def ciq_eval_set():
+    eval_list = []
+
+    # NRMSE, PSNR, Lab_NRMSE, SSIM
+    nrmse = {'eval_func': compare_nrmse, 'eval_index': 'NRMSE'}
+    psnr = {'eval_func': compare_psnr, 'eval_index': 'PSNR'}
+    Lab_NRMSE = {'eval_func': compare_labmse, 'eval_index': 'Lab_NRMSE'}
+    ssim = {'eval_func': lambda org, mapped: compare_ssim(org, mapped, multichannel=True), 'eval_index': 'SSIM'}
+    eval_list.extend([nrmse, psnr, Lab_NRMSE, ssim])
+
+    def get_rgb_topdist(org, mapped, ratio):
+        rgb_mse = np.linalg.norm(org - mapped, axis=2).reshape((org.shape[0] * org.shape[1])) / org.shape[2]
+        rgb_mse_top_dist = np.sort(rgb_mse)[::-1]
+        index = int(ratio * len(rgb_mse_top_dist))
+        mean = np.mean(rgb_mse_top_dist[:index])
+        return mean
+
+    # Top Distなど
+    for part in [.01, .05, .1]:
+        top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
+                        'eval_index': f'Top Dist {part * 100}%'}
+        # top_dist_sv = {'eval_func': lambda org, mapped: np.mean(save_mse_in_eachSaliency(org, mapped)[::-int(part * )],
+        #                'eval_index': f'Top Dist Sv {part * 100}%'}
+
+        eval_list.extend([top_dist_rgb, top_dist_sv])
+
+    return eval_list
 
 
 def CIQ_test_sup5(M=[16, 32], DIR=['sumple_img'], R={0.2, 0.25}):
@@ -804,15 +788,22 @@ def CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16], DIR=['sumple_img'], LIMIT=[3000
     :param DIV:
     :return:
     """
+    test_config = {
+        'trans_flag': True,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_flag': True,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             for lim in LIMIT:
                 for div in DIV:
-                    code = cv2.COLOR_BGR2LAB
-                    inverse_code = cv2.COLOR_LAB2BGR
-
                     def ciq(img):
-                        trans_img = cv2.cvtColor(img, code)
+                        trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
                         # trans_img = img.copy()
                         org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                         S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
@@ -849,8 +840,7 @@ def CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16], DIR=['sumple_img'], LIMIT=[3000
                         return dict
 
                     SAVE = 'MyPreQuantizeSVSumW_m{}_{}_lim{}_div{}_LAB'.format(m, dir, lim, div)
-                    CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=inverse_code,
-                             view_distribution=False, save_tmpSM=True, view_importance=False, importance_flag=True)
+                    CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
 def CIQ_test_BTPD_WithImpoertance(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
@@ -959,7 +949,7 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[8], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

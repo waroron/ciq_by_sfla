@@ -4,7 +4,7 @@ from btpd import BTPD, Ueda_CIQ
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
-from proposal import CIQ_test
+from proposal import CIQ_test, get_importance, ciq_eval_set
 from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil
 from skimage.measure import compare_nrmse, compare_psnr
 import pandas as pd
@@ -277,6 +277,16 @@ def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2):
 
 
 def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
+    test_config = {
+        'trans_flag': True,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             code = cv2.COLOR_BGR2LAB
@@ -291,8 +301,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
                 return dict
 
             SAVE = 'BTPD_M{}_{}_LAB'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir, trans_flag=True, code=code, inverse_code=code_inverse,
-                     view_distribution=True, importance_flag=True)
+            CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
 def CIQ_test_PSO():
@@ -333,6 +342,16 @@ def CIQ_test_Wu():
 
 
 def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
+    test_config = {
+        'trans_flag': False,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             code = cv2.COLOR_BGR2Lab
@@ -346,10 +365,20 @@ def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
                 return dict
 
             SAVE = 'KMeans_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse)
+            CIQ_test(ciq, SAVE, dir, **test_config)
 
 
 def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
+    test_config = {
+        'trans_flag': False,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             code = cv2.COLOR_BGR2Lab
@@ -364,10 +393,20 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
                 return dict
 
             SAVE = 'MedianCut_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=code_inverse, importance_flag=True)
+            CIQ_test(ciq, SAVE, dir, **test_config)
 
 
 def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
+    test_config = {
+        'trans_flag': False,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             def ciq(img):
@@ -390,16 +429,27 @@ def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
                 return frog
 
             SAVE = 'SFLA_M{}_{}'.format(m, dir)
-            CIQ_test(ciq, SAVE, test_img=dir)
+            CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
 def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
+    test_config = {
+        'trans_flag': False,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': True,
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set()
+    }
     for dir in DIR:
         for m in M:
             code = cv2.COLOR_BGR2LAB
             inverse_code = cv2.COLOR_LAB2BGR
+
             def ciq(img):
-                trans_img = cv2.cvtColor(img, code)
+                # trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
                 Sv = np.reshape(Sv_map / 255.0, newshape=(len(S), 1, 1)).astype(np.float32)
@@ -410,7 +460,7 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
                 return dict
 
             SAVE = 'Ueda_M{}_{}_RGB'.format(m, dir)
-            CIQ_test(ciq, SAVE, dir, trans_flag=False, code=code, inverse_code=inverse_code, view_distribution=True, importance_flag=True)
+            CIQ_test(ciq, SAVE, dir, **test_config)
 
 
 def CIQ_test_besed_on_SM():
@@ -433,4 +483,4 @@ if __name__ == '__main__':
     CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
     CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
     CIQ_test_MedianCut(M=[16, 32, 64], DIR=['sumple_img'])
-    # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
+    CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img'])

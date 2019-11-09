@@ -206,17 +206,17 @@ def get_importancemap(img):
     lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
 
-    imp_img = np.zeros(shape=(img.shape[0], img.shape[1]))
+    imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
     sm = np.reshape(sm, newshape=(img.shape[0] * img.shape[1], 1)).astype(np.float32)
     S = np.reshape(img,  newshape=(len(sm), 1, 3)).astype(np.uint64)
     uniq_S = np.unique(S, axis=0)
-    importance = np.round([np.median(sm[np.where(color == S)[0]]) for color in uniq_S]).astype(np.int)
+    importance = np.array([np.sum(sm[np.where(color == S)[0]]) for color in uniq_S]).astype(np.float32)
 
     for color, imp in zip(uniq_S, importance):
         index = np.where(color == img)
-        imp_img[index[:2]] = imp
+        imp_mat[index[:2]] = imp
 
-    return imp_img
+    return imp_mat
 
 
 def get_numcolors(img):
@@ -330,10 +330,11 @@ def test_importance_map():
 
         if not os.path.isdir(img_dir):
             os.mkdir(img_dir)
-        # saliency mapの保存
-        saliency_map = get_importancemap(img)
-        save_path = os.path.join(img_dir, img_path)
-        cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
+        # importance mapの保存
+        importance_map = get_importancemap(img)
+        save_path = os.path.join(img_dir, f'{root}.csv')
+        df = pd.DataFrame(importance_map)
+        df.to_csv(save_path)
         print('save Importance_Map map as img {}'.format(save_path))
 
 

@@ -89,7 +89,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
 
         # Importance
         if importance_eval:
-            importance_mat = get_img_importance(root)[:, :, 0]
+            importance_mat = get_img_importance(root)
             eval_errors = importance_eval(img, mapped, importance_mat)
             for eval_error in eval_errors:
                 score = eval_error['error']
@@ -211,8 +211,9 @@ def save_color_importanceerror(img, mapped, importance, save_path, filename):
 def get_img_importance(img_path):
     SAVE = 'Importance_Map'
     img_name, ext = os.path.splitext(img_path)
-    save_path = os.path.join(SAVE, f'{img_name}.csv')
-    csv = pd.read_csv(save_path, index_col=0)
+    save_path = os.path.join(SAVE, img_name, f'{img_name}.csv')
+    csv = pd.read_csv(save_path, index_col=0, dtype=np.float32)
+    csv = csv / np.max(csv)
     return csv
 
 
@@ -415,6 +416,8 @@ def ciq_eval_set():
 def get_importance(org, mapped, importance_mat):
     # width = org.shape[1]
     eval_list = []
+    if type(importance_mat) == pd.DataFrame:
+        importance_mat = importance_mat.values
     sorted_index = np.argsort(importance_mat.flatten())
     # sorted_position = [np.array([index // width, index % width]) for index in sorted_index[::-1]]
     importance_top_ratio = [.01, .05, .1]
@@ -428,6 +431,8 @@ def get_importance(org, mapped, importance_mat):
                 eval = {'error': sum_imp / (n + 1), 'index': f'Top Importance {importance_top_ratio[imp_n] * 100}%'}
                 eval_list.append(eval)
                 imp_n += 1
+        if imp_n >= len(importance_top_ratio):
+            break
     return eval_list
 
 

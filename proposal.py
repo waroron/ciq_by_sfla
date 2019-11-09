@@ -37,8 +37,8 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
     view_distribution = test_config['view_distribution']
     save_tmpSM = test_config['save_tmpSM']
     view_importance = test_config['view_importance']
-    importance_flag = test_config['importance_flag']
     ciq_error_eval = test_config['ciq_error_eval']
+    importance_eval = test_config['importance_eval']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -80,36 +80,44 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
         eval_array = []
         eval_indices = []
         for eval in ciq_error_eval:
-            eval_func = eval['eval_func']
-            eval_index = eval['eval_index']
-            score = eval_func(img, mapped)
-            eval_array.append(score)
-            eval_indices.append(eval_index)
+            eval_errors = eval(img, mapped)
+            for eval_error in eval_errors:
+                score = eval_error['error']
+                eval_index = eval_error['index']
+                eval_array.append(score)
+                eval_indices.append(eval_index)
 
         # Importance
         imp_mse_rgb_1 = 0
         imp_mse_rgb_10 = 0
-        if importance_flag:
-            ...
-            # importance_img = get_img_importance(root)[:, :, 0]
-            # lin_imp_img = np.reshape(importance_img, newshape=(img.shape[0] * img.shape[1]))
-            # lin_imp_img = minmax_scale(lin_imp_img, (0, 255))
-            #
-            # for part in [.01, .05, .1]:
-            #     top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
-            #                     'eval_index': f'Top Dist {part * 100}%'}
-            #     top_dist_sv = {'eval_func': save_mse_in_eachSaliency,
-            #                    'eval_index': f'Top Dist Sv {part * 100}%'}
-            #
-            #     eval_list.extend([top_dist_rgb, top_dist_sv])
-            # thresh_1 = int(np.max(lin_imp_img) * 0.99)
-            # thresh_10 = int(np.max(lin_imp_img) * 0.9)
-            #
-            # index_1 = np.where(thresh_1 < lin_imp_img)
-            # index_10 = np.where(thresh_10 < lin_imp_img)
-            #
-            # imp_mse_rgb_1 = np.mean(rgb_mse[index_1])
-            # imp_mse_rgb_10 = np.mean(rgb_mse[index_10])
+        if importance_eval:
+            importance_img = get_img_importance(root)[:, :, 0]
+            eval_errors = importance_eval(img, mapped, importance_img)
+            for eval_error in eval_errors:
+                score = eval_error['error']
+                eval_index = eval_error['index']
+                eval_array.append(score)
+                eval_indices.append(eval_index)
+
+
+            lin_imp_img = np.reshape(importance_img, newshape=(img.shape[0] * img.shape[1]))
+            lin_imp_img = minmax_scale(lin_imp_img, (0, 255))
+
+            for part in [.01, .05, .1]:
+                top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
+                                'eval_index': f'Top Dist {part * 100}%'}
+                top_dist_sv = {'eval_func': save_mse_in_eachSaliency,
+                               'eval_index': f'Top Dist Sv {part * 100}%'}
+
+                eval_list.extend([top_dist_rgb, top_dist_sv])
+            thresh_1 = int(np.max(lin_imp_img) * 0.99)
+            thresh_10 = int(np.max(lin_imp_img) * 0.9)
+
+            index_1 = np.where(thresh_1 < lin_imp_img)
+            index_10 = np.where(thresh_10 < lin_imp_img)
+
+            imp_mse_rgb_1 = np.mean(rgb_mse[index_1])
+            imp_mse_rgb_10 = np.mean(rgb_mse[index_10])
 
         df = pd.DataFrame([[img_path, en - st, *eval_array]], columns=['img_name', 'running time', *eval_indices])
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
@@ -385,32 +393,46 @@ def CIQ_test_sup4():
 
 
 def ciq_eval_set():
-    eval_list = []
-
     # NRMSE, PSNR, Lab_NRMSE, SSIM
-    nrmse = {'eval_func': compare_nrmse, 'eval_index': 'NRMSE'}
-    psnr = {'eval_func': compare_psnr, 'eval_index': 'PSNR'}
-    Lab_NRMSE = {'eval_func': compare_labmse, 'eval_index': 'Lab_NRMSE'}
-    ssim = {'eval_func': lambda org, mapped: compare_ssim(org, mapped, multichannel=True), 'eval_index': 'SSIM'}
-    eval_list.extend([nrmse, psnr, Lab_NRMSE, ssim])
+    def trad_dist(org, mapped):
+        nrmse = compare_nrmse(org, mapped)
+        psnr = compare_psnr(org, mapped)
+        lab_nrmse = compare_nrmse(org, mapped)
+        ssim = compare_ssim(org, mapped, multichannel=True)
 
-    def get_rgb_topdist(org, mapped, ratio):
+        eval_list = [{'error': nrmse, 'index': 'NRMSE'},
+                    {'error': psnr, 'index': 'PSNR'},
+                    {'error': lab_nrmse, 'index': 'LAB_NRMSE'},
+                    {'error': ssim, 'index': 'SSIM'}]
+
+        return eval_list
+
+    def get_rgb_topdist(org, mapped):
         rgb_mse = np.linalg.norm(org - mapped, axis=2).reshape((org.shape[0] * org.shape[1])) / org.shape[2]
         rgb_mse_top_dist = np.sort(rgb_mse)[::-1]
-        index = int(ratio * len(rgb_mse_top_dist))
-        mean = np.mean(rgb_mse_top_dist[:index])
-        return mean
+        eval_list = []
+        for part in [.01, .05, .1]:
+            index = int(part * len(rgb_mse_top_dist))
+            mean = np.mean(rgb_mse_top_dist[:index])
+            eval = {'error': mean, 'index': f'Top Dist {int(part * 100)}% RGB Error '}
+            eval_list.append(eval)
+        return eval_list
 
-    # Top Distなど
-    for part in [.01, .05, .1]:
-        top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
-                        'eval_index': f'Top Dist {part * 100}%'}
-        # top_dist_sv = {'eval_func': lambda org, mapped: np.mean(save_mse_in_eachSaliency(org, mapped)[::-int(part * )],
-        #                'eval_index': f'Top Dist Sv {part * 100}%'}
+    def get_rgb_sv_topdist(org, mapped):
+        sv_dist = save_mse_in_eachSaliency(org, mapped)
+        nan_index = np.where(np.isnan(sv_dist))
+        # len_without_nan = len(sv_dist) - len(nan_index)
+        sv_dist[nan_index] = .0
+        sv_dist = sv_dist[::-1]
+        eval_list = []
+        for part in [.01, .05, .1]:
+            index = int(part * len(sv_dist))
+            mean = np.mean(sv_dist[:index])
+            eval = {'error': mean, 'index': f'Top Dist {int(part * 100)}% Sv Error '}
+            eval_list.append(eval)
+        return eval_list
 
-        eval_list.extend([top_dist_rgb, top_dist_sv])
-
-    return eval_list
+    return [trad_dist, get_rgb_topdist, get_rgb_sv_topdist]
 
 
 def CIQ_test_sup5(M=[16, 32], DIR=['sumple_img'], R={0.2, 0.25}):

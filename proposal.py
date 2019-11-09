@@ -88,36 +88,14 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
                 eval_indices.append(eval_index)
 
         # Importance
-        imp_mse_rgb_1 = 0
-        imp_mse_rgb_10 = 0
         if importance_eval:
-            importance_img = get_img_importance(root)[:, :, 0]
-            eval_errors = importance_eval(img, mapped, importance_img)
+            importance_mat = get_img_importance(root)[:, :, 0]
+            eval_errors = importance_eval(img, mapped, importance_mat)
             for eval_error in eval_errors:
                 score = eval_error['error']
                 eval_index = eval_error['index']
                 eval_array.append(score)
                 eval_indices.append(eval_index)
-
-
-            lin_imp_img = np.reshape(importance_img, newshape=(img.shape[0] * img.shape[1]))
-            lin_imp_img = minmax_scale(lin_imp_img, (0, 255))
-
-            for part in [.01, .05, .1]:
-                top_dist_rgb = {'eval_func': lambda org, mapped: get_rgb_topdist(org, mapped, ratio=part),
-                                'eval_index': f'Top Dist {part * 100}%'}
-                top_dist_sv = {'eval_func': save_mse_in_eachSaliency,
-                               'eval_index': f'Top Dist Sv {part * 100}%'}
-
-                eval_list.extend([top_dist_rgb, top_dist_sv])
-            thresh_1 = int(np.max(lin_imp_img) * 0.99)
-            thresh_10 = int(np.max(lin_imp_img) * 0.9)
-
-            index_1 = np.where(thresh_1 < lin_imp_img)
-            index_10 = np.where(thresh_10 < lin_imp_img)
-
-            imp_mse_rgb_1 = np.mean(rgb_mse[index_1])
-            imp_mse_rgb_10 = np.mean(rgb_mse[index_10])
 
         df = pd.DataFrame([[img_path, en - st, *eval_array]], columns=['img_name', 'running time', *eval_indices])
         csv_path = os.path.join(SAVE, '{}_scores.csv'.format(test_name))
@@ -232,11 +210,10 @@ def save_color_importanceerror(img, mapped, importance, save_path, filename):
 
 def get_img_importance(img_path):
     SAVE = 'Importance_Map'
-    path = os.path.join(SAVE, img_path)
-    img_name = os.listdir(path)[0]
-    path = os.path.join(path, img_name)
-    imp_img = cv2.imread(path)
-    return imp_img
+    img_name, ext = os.path.splitext(img_path)
+    save_path = os.path.join(SAVE, f'{img_name}.csv')
+    csv = pd.read_csv(save_path, index_col=0)
+    return csv
 
 
 def CIQ_test_gradually():
@@ -408,7 +385,7 @@ def ciq_eval_set():
         return eval_list
 
     def get_rgb_topdist(org, mapped):
-        rgb_mse = np.linalg.norm(org - mapped, axis=2).reshape((org.shape[0] * org.shape[1])) / org.shape[2]
+        rgb_mse = np.linalg.norm(org - mapped, axis=2).flatten() / org.shape[2]
         rgb_mse_top_dist = np.sort(rgb_mse)[::-1]
         eval_list = []
         for part in [.01, .05, .1]:
@@ -433,6 +410,25 @@ def ciq_eval_set():
         return eval_list
 
     return [trad_dist, get_rgb_topdist, get_rgb_sv_topdist]
+
+
+def get_importance(org, mapped, importance_mat):
+    # width = org.shape[1]
+    eval_list = []
+    sorted_index = np.argsort(importance_mat.flatten())
+    # sorted_position = [np.array([index // width, index % width]) for index in sorted_index[::-1]]
+    importance_top_ratio = [.01, .05, .1]
+    dist_img = np.linalg.norm(org - mapped, axis=2).flatten() / org.shape[2]
+    sorted_dist_img = dist_img[sorted_index]
+    sum_imp = .0
+    imp_n = 0
+    for n, dist in enumerate(sorted_dist_img):
+        sum_imp += dist
+        if (n + 1) > (importance_top_ratio[imp_n] * len(sorted_index)):
+                eval = {'error': sum_imp / (n + 1), 'index': f'Top Importance {importance_top_ratio[imp_n] * 100}%'}
+                eval_list.append(eval)
+                imp_n += 1
+    return eval_list
 
 
 def CIQ_test_sup5(M=[16, 32], DIR=['sumple_img'], R={0.2, 0.25}):
@@ -817,7 +813,7 @@ def CIQ_test_BTPD_MyPreQuantizeandOnlySV(M=[16], DIR=['sumple_img'], LIMIT=[3000
         'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': True,
-        'importance_flag': True,
+        'importance_eval': get_importance,
         'ciq_error_eval': ciq_eval_set()
     }
     for dir in DIR:

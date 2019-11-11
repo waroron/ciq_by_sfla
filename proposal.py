@@ -844,10 +844,10 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                         S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                         _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
-                        Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
+                        org_Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
 
                         # pre quantize
-                        pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
+                        pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, org_Sv, lim)
                         pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
                         print(f'{len(np.unique(org_S, axis=0))}')
                         # SM count in each colors
@@ -855,7 +855,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                         S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                         uniq_S = np.unique(S, axis=0)
-                        uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]]) / div for color in uniq_S]).astype(np.int)
+                        uniq_Sv = np.round([np.sum(org_Sv[np.where(color == S)[0]]) / div for color in uniq_S]).astype(np.int)
 
                         # only in case of sum
                         uniq_Sv = (uniq_Sv / np.min(uniq_Sv)).astype(np.int)
@@ -879,7 +879,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                                               {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                         return dict
 
-                    SAVE = 'ProposalTile_m{}_{}_lim{}_div{}_LAB'.format(m, dir, lim, div)
+                    SAVE = 'ProposalTile_m{}_{}_lim{}_div{}_LAB_orgSV'.format(m, dir, lim, div)
                     CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
@@ -911,9 +911,9 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                     S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                     _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
-                    Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
+                    org_Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                     # pre quantize
-                    pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
+                    pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, org_Sv, lim)
                     pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
                     print(f'{len(np.unique(org_S, axis=0))}')
                     # SM count in each colors
@@ -921,7 +921,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                     S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                     uniq_S = np.unique(S, axis=0)
-                    uniq_Sv = np.array([np.sum(Sv[np.where(color == S)[0]])for color in uniq_S]).astype(np.float32)
+                    uniq_Sv = np.array([np.sum(org_Sv[np.where(color == S)[0]])for color in uniq_S]).astype(np.float32)
                     # only in case of sum
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
@@ -935,7 +935,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                             'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
                                           {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                     return dict
-                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)
+                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_orgSV'.format(m, dir, lim)
                 CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
@@ -1045,8 +1045,8 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    CIQ_test_ProposalTile(M=[32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    CIQ_test_ProposalSvSumWeight(M=[32], DIR=['sumple_img'], LIMIT=[1000])
+    CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

@@ -165,41 +165,45 @@ def save_mse_in_eachSaliency(img, mapped, save_path=None, filename=None):
     return rgb_mse_sv
 
 
+def make_color_distribution_img(pixels, img_name, statistics=()):
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection='3d')  # 何もプロットしていないAxesでもAxisは自動的に作られる
+    colors = pixels / 255.0
+    ax.scatter(pixels[:, 0], pixels[:, 1], pixels[:, 2], c=colors, marker=',', label='pixels')
+    # ax.set_title(img_name)
+    ax.set_xlabel("B")
+    ax.set_ylabel("G")
+    ax.set_zlabel("R")
+    ax.set_xlim([0, 255])
+    ax.set_ylim([0, 255])
+    ax.set_zlim([0, 255])
+
+    ax.grid()
+
+    cell = []
+    indices = []
+    for stat in statistics:
+        label = stat['label']
+        func = stat['func']
+        cell.append(func(pixels))
+        indices.append(label)
+    if statistics:
+        ax.table(cellText=[cell], colLabels=[indices], loc='bottom')
+
+    # fig.patch.set_alpha(0.0)
+    return fig
+
+
 def save_color_distribution(groups, save_path, filename):
     width = 1
     while width ** 2 < len(groups):
         width += 1
     for num, group in enumerate(groups):
-        COLUMNS = ['Variances', 'Variances by uniques', 'Mean']
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection='3d')  # 何もプロットしていないAxesでもAxisは自動的に作られる
-        colors = group / 255.0
-        ax.scatter(group[:, 0], group[:, 1], group[:, 2], c=colors, marker=',', label='pixels')
-
-        # Mean value
-        mean = np.mean(group, axis=0).astype(np.uint8)
-        colors = mean / 255.0
-        ax.scatter(mean[0], mean[1], mean[2], c=[colors], marker='*', label='mean')
-
-        # Values by uniques
-        uniq = np.unique(group, axis=0)
-        var_uniq = np.var(uniq)
-
-        CellText = [[np.var(group), var_uniq, mean]]
-
-        ax.set_title("{} Color Luminecence Distribution".format(num + 1))
-        ax.set_xlabel("B")
-        ax.set_ylabel("G")
-        ax.set_zlabel("R")
-        ax.set_xlim([0, 255])
-        ax.set_ylim([0, 255])
-        ax.set_zlim([0, 255])
-        # ax.legend()
-        ax.grid()
-
-        ax.table(cellText=CellText, colLabels=COLUMNS, loc='bottom')
-        filepath = os.path.join(save_path, '{}_'.format(num) + filename)
-        plt.savefig(filepath)
+        img_name = f'{len(group)}colors_distribution_n{num + 1}'
+        fig = make_color_distribution_img(group, img_name)
+        filepath = os.path.join(save_path, f'{img_name}.jpg')
+        fig.savefig(filepath, bbox_inches="tight", transparent=True)
+        print(f'save {filepath}')
         plt.close()
 
 
@@ -839,8 +843,8 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
 
                         # pre quantize
-                        q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
-                        mapped = mapping_pallet_to_img(trans_img, q)
+                        pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
+                        mapped = mapping_pallet_to_img(trans_img, pre_q)
                         print(f'{len(np.unique(org_S, axis=0))}')
                         # SM count in each colors
                         _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
@@ -861,7 +865,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
 
                         q, root, groups = BTPD(tile_S, m)
                         dict = {'palette': q,
-                                'groups': groups,
+                                'groups': [pre_q, q],
                                 'tmp_sm': Sv_map}
                         return dict
 
@@ -899,8 +903,8 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                     # pre quantize
-                    q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
-                    mapped = mapping_pallet_to_img(trans_img, q)
+                    pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
+                    mapped = mapping_pallet_to_img(trans_img, pre_q)
                     print(f'{len(np.unique(org_S, axis=0))}')
                     # SM count in each colors
                     _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
@@ -912,7 +916,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
                     dict = {'palette': q,
-                            'groups': groups,
+                            'groups': [pre_q, q],
                             'tmp_sm': Sv_map}
                     return dict
                 SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)
@@ -1025,8 +1029,8 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    # CIQ_test_ProposalTile(M=[16, 32, 64], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    CIQ_test_ProposalSvSumWeight(M=[16, 32, 64], DIR=['sumple_img'], LIMIT=[1000])
+    CIQ_test_ProposalTile(M=[32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    CIQ_test_ProposalSvSumWeight(M=[32], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

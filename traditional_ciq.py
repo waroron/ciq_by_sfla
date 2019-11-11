@@ -5,7 +5,8 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from proposal import CIQ_test, get_importance, ciq_eval_set
-from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil
+from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil,\
+    get_allcolors_from_img
 from skimage.measure import compare_nrmse, compare_psnr
 import pandas as pd
 import os
@@ -281,10 +282,10 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'trans_flag': True,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': False,
+        'view_distribution': True,
         'save_tmpSM': True,
-        'view_importance': True,
-        'importance_eval': get_importance,
+        'view_importance': False,
+        'importance_eval': False,
         'ciq_error_eval': ciq_eval_set()
     }
     for dir in DIR:
@@ -295,9 +296,12 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
             def ciq(img):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                all_colors = get_allcolors_from_img(img)
                 q, root, groups = BTPD(S, m)
+                reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
+                retrans_q = cv2.cvtColor(reshape_q, code_inverse)
                 dict = {'palette': q,
-                        'groups': groups}
+                        'groups': [retrans_q[:, 0, :], all_colors]}
                 return dict
 
             SAVE = 'BTPD_M{}_{}_LAB'.format(m, dir)
@@ -373,10 +377,10 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
         'trans_flag': False,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': False,
+        'view_distribution': True,
         'save_tmpSM': True,
-        'view_importance': True,
-        'importance_eval': get_importance,
+        'view_importance': False,
+        'importance_eval': False,
         'ciq_error_eval': ciq_eval_set()
     }
     for dir in DIR:
@@ -389,7 +393,9 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
                 pilimg = cv2pil(img)
                 q = median_cut(pilimg, m)
                 cv_q = q[:, ::-1]
-                dict = {'palette': cv_q}
+                all_colors = get_allcolors_from_img(img)
+                dict = {'palette': cv_q,
+                        'groups': [cv_q, all_colors]}
                 return dict
 
             SAVE = 'MedianCut_M{}_{}_RGB'.format(m, dir)
@@ -480,7 +486,7 @@ def CIQ_test_besed_on_SM():
 
 
 if __name__ == '__main__':
-    # CIQ_test_BTPD(M=[16, 32, 64], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
-    CIQ_test_MedianCut(M=[16, 32, 64], DIR=['sumple_img'])
-    CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img'])
+    CIQ_test_BTPD(M=[32], DIR=['sumple_img'])
+    # CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
+    # CIQ_test_MedianCut(M=[64, 128], DIR=['sumple_img'])
+    # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img'])

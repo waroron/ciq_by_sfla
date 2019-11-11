@@ -58,7 +58,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
             if view_distribution:
                 groups = dict['groups']
             if save_tmp_imgs:
-                tmp_sm = dict['save_imgs']
+                tmp_imgs = dict['save_imgs']
 
         except KeyError as e:
             print(f'Error {e}, in{img_path}')
@@ -124,9 +124,13 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
         residual_path = os.path.join(save_path, 'residual_' + img_path)
         cv2.imwrite(residual_path, residual)
 
-        # save tmp sm
-        tmp_sm_path = os.path.join(save_path, 'tmp_sm_' + img_path)
-        cv2.imwrite(tmp_sm_path, tmp_sm)
+        # save tmp imgs
+        for tmp_img in tmp_imgs:
+            img_name = tmp_img['filename']
+            tmp_img_bin = tmp_img['img']
+            filepath = os.path.join(save_path, img_name)
+            cv2.imwrite(filepath, tmp_img_bin)
+            print(f'save {filepath}')
 
         if view_distribution:
             save_color_distribution(groups, save_path, 'Dist_' + root + '.jpg')
@@ -864,8 +868,13 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         print('pre quantize {} colors'.format(len(root.get_leaves())))
 
                         q, root, groups = BTPD(tile_S, m)
+                        pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
+                        reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
+                        retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
+                        reshape_pre_q = np.reshape(pre_q, newshape=(len(pre_q), 1, 3)).astype(np.uint8)
+                        retrans_pre_q = cv2.cvtColor(reshape_pre_q, cv2.COLOR_LAB2BGR)
                         dict = {'palette': q,
-                                'groups': [pre_q[:, 0, :], q[:, 0, :]],
+                                'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
                                 'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
                                               {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                         return dict
@@ -916,8 +925,13 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     # only in case of sum
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
+                    pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
+                    reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
+                    retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
+                    reshape_pre_q = np.reshape(pre_q, newshape=(len(pre_q), 1, 3)).astype(np.uint8)
+                    retrans_pre_q = cv2.cvtColor(reshape_pre_q, cv2.COLOR_LAB2BGR)
                     dict = {'palette': q,
-                            'groups': [pre_q[:, 0, :], q[:, 0, :]],
+                            'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
                             'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
                                           {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                     return dict

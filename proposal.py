@@ -60,9 +60,8 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
             if save_tmpSM:
                 tmp_sm = dict['tmp_sm']
 
-        except KeyboardInterrupt:
-            print('LinAlgError in {}'.format(img_path))
-            continue
+        except KeyError as e:
+            print(f'Error {e}, in{img_path}')
 
         if trans_flag:
             luv_img = cv2.cvtColor(img, code)
@@ -916,7 +915,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                             'groups': groups,
                             'tmp_sm': Sv_map}
                     return dict
-                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_div{}_LAB'.format(m, dir, lim)
+                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)
                 CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
@@ -1026,7 +1025,7 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    CIQ_test_ProposalTile(M=[16, 32, 64], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    # CIQ_test_ProposalTile(M=[16, 32, 64], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
     CIQ_test_ProposalSvSumWeight(M=[16, 32, 64], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])

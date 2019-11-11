@@ -824,7 +824,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
         'trans_flag': True,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': False,
+        'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': True,
         'importance_eval': get_importance,
@@ -865,7 +865,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
 
                         q, root, groups = BTPD(tile_S, m)
                         dict = {'palette': q,
-                                'groups': [pre_q, q],
+                                'groups': [pre_q[:, 0, :], q[:, 0, :]],
                                 'tmp_sm': Sv_map}
                         return dict
 
@@ -886,7 +886,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
         'trans_flag': True,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': False,
+        'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': True,
         'importance_eval': get_importance,
@@ -916,7 +916,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
                     dict = {'palette': q,
-                            'groups': [pre_q, q],
+                            'groups': [pre_q[:, 0, :], q[:, 0, :]],
                             'tmp_sm': Sv_map}
                     return dict
                 SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)

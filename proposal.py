@@ -35,7 +35,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
     code = test_config['trans_code']
     inverse_code = test_config['trans_inverse_code']
     view_distribution = test_config['view_distribution']
-    save_tmpSM = test_config['save_tmpSM']
+    save_tmp_imgs = test_config['save_tmp_imgs']
     view_importance = test_config['view_importance']
     ciq_error_eval = test_config['ciq_error_eval']
     importance_eval = test_config['importance_eval']
@@ -57,8 +57,8 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
             palette = dict['palette']
             if view_distribution:
                 groups = dict['groups']
-            if save_tmpSM:
-                tmp_sm = dict['tmp_sm']
+            if save_tmp_imgs:
+                tmp_sm = dict['save_imgs']
 
         except KeyError as e:
             print(f'Error {e}, in{img_path}')
@@ -825,7 +825,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
         'view_distribution': True,
-        'save_tmpSM': True,
+        'save_tmp_imgs': True,
         'view_importance': True,
         'importance_eval': get_importance,
         'ciq_error_eval': ciq_eval_set()
@@ -844,12 +844,12 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
 
                         # pre quantize
                         pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
-                        mapped = mapping_pallet_to_img(trans_img, pre_q)
+                        pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
                         print(f'{len(np.unique(org_S, axis=0))}')
                         # SM count in each colors
-                        _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
+                        _, __, Sv_map = get_saliency_hist(pre_mapped, sm='SR')
                         Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
-                        S = np.reshape(mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                        S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                         uniq_S = np.unique(S, axis=0)
                         uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]]) / div for color in uniq_S]).astype(np.int)
 
@@ -866,7 +866,8 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         q, root, groups = BTPD(tile_S, m)
                         dict = {'palette': q,
                                 'groups': [pre_q[:, 0, :], q[:, 0, :]],
-                                'tmp_sm': Sv_map}
+                                'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
+                                              {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                         return dict
 
                     SAVE = 'ProposalTile_m{}_{}_lim{}_div{}_LAB'.format(m, dir, lim, div)
@@ -887,7 +888,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
         'view_distribution': True,
-        'save_tmpSM': True,
+        'save_tmp_imgs': True,
         'view_importance': True,
         'importance_eval': get_importance,
         'ciq_error_eval': ciq_eval_set()
@@ -904,12 +905,12 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                     # pre quantize
                     pre_q, root, pre_groups = BTPD_WTSE_LimitationSv(S, Sv, lim)
-                    mapped = mapping_pallet_to_img(trans_img, pre_q)
+                    pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
                     print(f'{len(np.unique(org_S, axis=0))}')
                     # SM count in each colors
-                    _, __, Sv_map = get_saliency_hist(mapped, sm='SR')
+                    _, __, Sv_map = get_saliency_hist(pre_mapped, sm='SR')
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
-                    S = np.reshape(mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                    S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                     uniq_S = np.unique(S, axis=0)
                     uniq_Sv = np.array([np.sum(Sv[np.where(color == S)[0]])for color in uniq_S]).astype(np.float32)
                     # only in case of sum
@@ -917,7 +918,8 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
                     dict = {'palette': q,
                             'groups': [pre_q[:, 0, :], q[:, 0, :]],
-                            'tmp_sm': Sv_map}
+                            'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
+                                          {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                     return dict
                 SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)
                 CIQ_test(ciq, SAVE, test_img=dir, **test_config)

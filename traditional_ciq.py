@@ -67,6 +67,79 @@ def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
     return shuffled_frogs[global_best_index], hist_bestfrogs, hist_frogs
 
 
+def SFLA_CQ(img, k, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
+    perm = np.arange(0, n_frogs, 1)
+    hist_frogs = []
+    hist_bestfrogs = []
+    all_colors = get_allcolors_from_img(img)
+
+    def eval_frog(frog):
+        # 1. mapping
+        mapped = mapping_pallet_to_img(img, frog)
+
+        # 2. replace each element of frog
+        new_frog = frog.copy()
+        for n in range(k):
+            indices = np.where(mapped == frog[n])
+            org_pixels = img[indices[:2]]
+            new_frog[n] = np.mean(org_pixels, axis=0)
+
+        # 3. eval psnr
+        psnr = compare_psnr(img, mapped)
+        return psnr, new_frog
+
+    def create_frog():
+        indices = np.random.permutation(len(all_colors))
+        return all_colors[indices[:k]]
+
+    init_frogs = np.array([create_frog() for _ in range(n_frogs)])
+    shuffled_frogs = init_frogs.copy()
+    shuffled_fitness = np.zeros(shape=n_frogs)
+    hist_frogs.append(shuffled_frogs)
+    global_best_index = 0
+    for t in range(T_max):
+        shuffled_index = np.random.permutation(perm)
+        shuffled_frogs = shuffled_frogs[shuffled_index]
+
+        # eval all frogs
+        for n in range(n_frogs):
+            eval, new_frog = eval_frog(shuffled_frogs[n])
+            shuffled_fitness[n] = eval
+            shuffled_frogs[n] = new_frog
+
+        global_best_index = np.argmax(shuffled_fitness)
+        hist_bestfrogs.append(shuffled_frogs[global_best_index])
+
+        print('{} gens:  best score: {}'.format(t, shuffled_fitness[global_best_index]))
+
+        # divide all frogs into several memeplexes
+        assert n_frogs % n_mem == 0, "wrong setting of num_frogs or num_memeplex"
+
+        for bd in range(n_mem, n_frogs, n_mem):
+            for j in range(J_max):
+                index_bius = bd - n_mem
+                mem_best_index = np.argmax(shuffled_fitness[index_bius: bd])
+                mem_worst_index = np.argmin(shuffled_fitness[index_bius: bd])
+                # compute Eqs.(1) and (2)
+                D = rho * (shuffled_frogs[mem_best_index + index_bius] - shuffled_frogs[mem_worst_index + index_bius])
+                next_x_worst = shuffled_frogs[mem_worst_index + index_bius] + D
+                next_x_worst_fit, next_x_worst = eval_frog(next_x_worst)
+
+                if next_x_worst_fit < shuffled_fitness[mem_worst_index + index_bius]:
+                    # apply Eqs.(1) and (3)
+                    D = rho * (shuffled_frogs[global_best_index] - shuffled_frogs[mem_worst_index + bd])
+                    next_x_worst = shuffled_frogs[mem_worst_index + bd] + D
+                    next_x_worst_fit, next_x_worst = eval_frog(next_x_worst)
+
+                    if next_x_worst_fit < shuffled_fitness[mem_worst_index + index_bius]:
+                        # Move the worst frog to a random position
+                        next_x_worst = create_frog()
+                shuffled_frogs[mem_worst_index + index_bius] = next_x_worst
+                shuffled_fitness[mem_worst_index + index_bius] = next_x_worst_fit
+
+    return shuffled_frogs[global_best_index], hist_bestfrogs, hist_frogs
+
+
 def OneMaxBySFLA():
     def fit(frog):
         overflow_index = np.where(frog >= 0.5)
@@ -285,8 +358,9 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': False,
-        'importance_eval': False,
-        'ciq_error_eval': ciq_eval_set()
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False
     }
     for dir in DIR:
         for m in M:
@@ -354,7 +428,8 @@ def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
         'save_tmpSM': True,
         'view_importance': True,
         'importance_eval': get_importance,
-        'ciq_error_eval': ciq_eval_set()
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False
     }
     for dir in DIR:
         for m in M:
@@ -380,8 +455,9 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
         'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': False,
-        'importance_eval': False,
-        'ciq_error_eval': ciq_eval_set()
+        'importance_eval': get_importance,
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False
     }
     for dir in DIR:
         for m in M:
@@ -407,32 +483,20 @@ def CIQ_test_SFLA(M=[16], DIR=['sumple_img']):
         'trans_flag': False,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': False,
-        'save_tmpSM': True,
+        'view_distribution': True,
+        'save_tmpSM': False,
         'view_importance': True,
         'importance_eval': get_importance,
-        'ciq_error_eval': ciq_eval_set()
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False
     }
     for dir in DIR:
         for m in M:
             def ciq(img):
-                def create_color_palette():
-                    return np.random.randint(0, 256, size=(m, 3))
-
-                def psnr(frog):
-                    mapped = mapping_pallet_to_img(img, frog)
-                    psnr = compare_psnr(img, mapped)
-                    return psnr
-
-                def Lab_psnr(frog):
-                    mapped = mapping_pallet_to_img(img, frog)
-                    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
-                    mapped_lab = cv2.cvtColor(mapped, cv2.COLOR_BGR2Lab)
-                    psnr = compare_psnr(img_lab, mapped_lab)
-                    return psnr
-
-                frog, _, __ = SFLA(Lab_psnr, create_color_palette)
-                return frog
+                frog, _, __ = SFLA_CQ(img, m)
+                dict = {'palette': frog,
+                        'groups': [frog]}
+                return dict
 
             SAVE = 'SFLA_M{}_{}'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, **test_config)
@@ -447,7 +511,8 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
         'save_tmpSM': True,
         'view_importance': True,
         'importance_eval': get_importance,
-        'ciq_error_eval': ciq_eval_set()
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False
     }
     for dir in DIR:
         for m in M:
@@ -486,7 +551,8 @@ def CIQ_test_besed_on_SM():
 
 
 if __name__ == '__main__':
-    CIQ_test_BTPD(M=[32], DIR=['sumple_img'])
-    # CIQ_test_Ueda(M=[16, 32, 64], DIR=['sumple_img'])
-    # CIQ_test_MedianCut(M=[64, 128], DIR=['sumple_img'])
-    # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img'])
+    # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
+    CIQ_test_BTPD(M=[16], DIR=['sumple_img'])
+    CIQ_test_Ueda(M=[16], DIR=['sumple_img'])
+    CIQ_test_MedianCut(M=[16], DIR=['sumple_img'])
+    CIQ_test_KMeans(M=[16], DIR=['sumple_img'])

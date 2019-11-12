@@ -207,12 +207,11 @@ def get_importancemap(img):
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
 
     imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
-    sm = np.reshape(sm, newshape=(img.shape[0] * img.shape[1], 1)).astype(np.float32)
-    S = np.reshape(img,  newshape=(len(sm), 1, 3)).astype(np.uint64)
-    uniq_S = np.unique(S, axis=0)
-    importance = np.array([np.sum(sm[np.where(color == S)[0]]) for color in uniq_S]).astype(np.float32)
+    sm = sm.flatten()
+    all_colors = get_allcolors_from_img(img)
+    importance = np.array([np.sum(sm[np.where(color == img)[0]]) for color in all_colors]).astype(np.uint64)
 
-    for color, imp in zip(uniq_S, importance):
+    for color, imp in zip(all_colors, importance):
         index = np.where(color == img)
         imp_mat[index[:2]] = imp
 
@@ -325,7 +324,7 @@ def test_importance_map():
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
 
-    for num, img_path in enumerate(imgs[:5]):
+    for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         org_img = cv2.imread(path)
         img = org_img.copy()
@@ -338,6 +337,32 @@ def test_importance_map():
         # importance mapの保存
         importance_map = get_importancemap(img)
         save_path = os.path.join(img_dir, f'{root}.csv')
+        df = pd.DataFrame(importance_map)
+        df.to_csv(save_path)
+        print('save Importance_Map map as img {}'.format(save_path))
+
+
+def get_all_preimportance_map():
+    DIR = 'ProposalSvSumWeight_m32_sumple_img_lim1000_LAB_orgSV'
+    SAVE = 'Importance_Map'
+    imgs = os.listdir(DIR)
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs[18:]):
+        path = os.path.join(DIR, img_path)
+        org_img = cv2.imread(f'{path}/pre_mapped.jpg')
+        img = org_img.copy()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        root, ext = os.path.splitext(img_path)
+        img_dir = os.path.join(SAVE, root)
+
+        if not os.path.isdir(img_dir):
+            os.mkdir(img_dir)
+        # importance mapの保存
+        importance_map = get_importancemap(img)
+        save_path = os.path.join(img_dir, f'premapped_importance.csv')
         df = pd.DataFrame(importance_map)
         df.to_csv(save_path)
         print('save Importance_Map map as img {}'.format(save_path))
@@ -451,6 +476,7 @@ if __name__ == '__main__':
     # test_sum_saluency()
     # test_smextraction()
     # test_importance_map()
-    test_importance_map()
+    get_all_preimportance_map()
+    # test_importance_map()
     # test_saliency_map()
     # test_sm_variance()

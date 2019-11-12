@@ -924,7 +924,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                     S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                     uniq_S = np.unique(S, axis=0)
-                    uniq_Sv = np.array([Sv[np.where(color == S)[0]]for color in uniq_S]).astype(np.float32)
+                    uniq_Sv = [Sv[np.where(color == S)[0]] for color in uniq_S]
                     uniq_Sv = np.array([np.mean(sv_array) * (np.sum(sv_array) / (img.shape[0] * img.shape[1])) \
                                         for sv_array in uniq_Sv])
                     # only in case of sum

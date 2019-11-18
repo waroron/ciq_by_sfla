@@ -371,7 +371,9 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 all_colors = get_allcolors_from_img(img)
-                q, root, groups = BTPD(S, m)
+                visualization_config = {'visualization': False,
+                                        'visualization_path': 'visualization/'}
+                q, root, groups = BTPD(S, m, **visualization_config)
                 reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
                 retrans_q = cv2.cvtColor(reshape_q, code_inverse)
                 dict = {'palette': q,
@@ -380,6 +382,24 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
 
             SAVE = 'BTPD_M{}_{}_LAB'.format(m, dir)
             CIQ_test(ciq, SAVE, test_img=dir, **test_config)
+
+
+def BTPD_visualization():
+    SUMPLE = 'sumple_img/'
+    imgs = os.listdir(SUMPLE)
+
+    for img_name in imgs:
+        img = cv2.imread(f'{SUMPLE}/{img_name}')
+        trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+        visualization_config = {'visualization': True,
+                                'visualize_path': f'BTPD_visualization/{img_name}'}
+        q, root, groups = BTPD(S, 16, **visualization_config)
+        reshape_q = np.reshape(q, newshape=(16, 1, 3)).astype(np.uint8)
+        # retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
+        mapped = mapping_pallet_to_img(img, reshape_q)
+        cv2.imwrite(f'BTPD_visualization/{img_name}/mapped.png', mapped)
+        print(f'saved at BTPD_visualization/{img_name}')
 
 
 def CIQ_test_PSO():
@@ -552,7 +572,8 @@ def CIQ_test_besed_on_SM():
 
 if __name__ == '__main__':
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
-    CIQ_test_BTPD(M=[16], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[16], DIR=['sumple_img'])
-    CIQ_test_MedianCut(M=[16], DIR=['sumple_img'])
-    CIQ_test_KMeans(M=[16], DIR=['sumple_img'])
+    BTPD_visualization()
+    # CIQ_test_BTPD(M=[16], DIR=['sumple_img'])
+    # CIQ_test_Ueda(M=[16], DIR=['sumple_img'])
+    # CIQ_test_MedianCut(M=[16], DIR=['sumple_img'])
+    # CIQ_test_KMeans(M=[16], DIR=['sumple_img'])

@@ -1,5 +1,9 @@
 import numpy as np
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import cv2
+import os
+from pathlib import Path
 
 
 class Node:
@@ -189,7 +193,10 @@ def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
     return right_params, left_params
 
 
-def BTPD(S, M):
+def BTPD(S, M, **visualize_config):
+    visualization = visualize_config['visualization']
+    if visualization:
+        visualize_path = visualize_config['visualize_path']
     # precalc
     n_ch = S.shape[-1]
     S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
@@ -237,6 +244,31 @@ def BTPD(S, M):
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
         current_node.set_right(right=right)
         current_node.set_left(left=left)
+
+        if visualization:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)  # 何もプロットしていないAxesでもAxisは自動的に作られる
+            colors_1 = c_2n[:, 0, :] / 255.0
+            colors_2 = c_2n1[:, 0, :] / 255.0
+            tmp_y1 = np.array([0 for n in range(len(c_2n_index[0]))])
+            tmp_y2 = np.array([0 for n in range(len(c_2n1_index[0]))])
+            ax.scatter(compare[c_2n_index], tmp_y1, c=colors_1, marker=',', label='pixels')
+            ax.scatter(compare[c_2n1_index], tmp_y2, c=colors_2, marker=',', label='pixels')
+
+            cri_y = np.arange(-0.1, 0.1, 0.001)
+            criterias = [criteria for n in range(len(cri_y))]
+            ax.plot(criterias, cri_y, c='blue', linestyle='dashed',)
+            ax.set_xlabel("principal score")
+            # ax.set_ylabel("G")
+            # ax.set_xlim([0, 255])
+            # ax.set_ylim([-1, 1])
+            ax.tick_params(labelleft="off", left="off")  # y軸の削除
+            ax.set_yticklabels([])
+            ax.grid()
+            Path(visualize_path).mkdir(parents=True, exist_ok=True)
+            filepath = os.path.join(visualize_path, f'{num}.jpg')
+            fig.savefig(filepath, bbox_inches="tight", transparent=True)
+            plt.close(fig)
 
     leaves = root.set_leaves()
     groups = []

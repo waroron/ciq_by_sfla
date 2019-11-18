@@ -50,6 +50,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
         img = cv2.imread(path)
         groups = None
         tmp_sm = None
+        palette = None
         try:
             st = time.time()
             dict = ciq(img)

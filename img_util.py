@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 import pySaliencyMap
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 import pandas as pd
 from PIL import Image
 from skimage.measure import compare_nrmse, compare_psnr
@@ -206,16 +206,22 @@ def get_importancemap(img):
     lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
 
-    imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
-    sm = sm.flatten()
+    sum_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
+    mean_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
+    max_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
     all_colors = get_allcolors_from_img(img)
-    importance = np.array([np.sum(sm[np.where(color == img)[0]]) for color in all_colors]).astype(np.uint64)
+    colors_sv_array = [sm[np.where(color == img)[:2]] for color in all_colors]
+    sum_importance = np.array([np.sum(sm_array) for sm_array in colors_sv_array])
+    mean_importance = np.array([np.mean(sm_array) for sm_array in colors_sv_array])
+    max_importance = np.array([np.max(sm_array) for sm_array in colors_sv_array])
 
-    for color, imp in zip(all_colors, importance):
+    for n, color in enumerate(all_colors):
         index = np.where(color == img)
-        imp_mat[index[:2]] = imp
+        sum_imp_mat[index[:2]] = sum_importance[n]
+        mean_imp_mat[index[:2]] = mean_importance[n]
+        max_imp_mat[index[:2]] = max_importance[n]
 
-    return imp_mat
+    return sum_imp_mat, mean_imp_mat, max_imp_mat
 
 
 def get_allcolors_from_img(img):
@@ -350,7 +356,7 @@ def get_all_preimportance_map():
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
 
-    for num, img_path in enumerate(imgs[18:]):
+    for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         org_img = cv2.imread(f'{path}/pre_mapped.jpg')
         img = org_img.copy()
@@ -361,11 +367,13 @@ def get_all_preimportance_map():
         if not os.path.isdir(img_dir):
             os.mkdir(img_dir)
         # importance mapの保存
-        importance_map = get_importancemap(img)
-        save_path = os.path.join(img_dir, f'premapped_importance.csv')
-        df = pd.DataFrame(importance_map)
-        df.to_csv(save_path)
-        print('save Importance_Map map as img {}'.format(save_path))
+        sum_imp, mean_imp, max_imp = get_importancemap(img)
+        labels = ['sum_imp', 'mean_imp', 'max_imp']
+        for imp_mat, label in zip([sum_imp, mean_imp, max_imp], labels):
+            save_path = os.path.join(img_dir, f'premapped_{label}_importance.csv')
+            df = pd.DataFrame(imp_mat)
+            df.to_csv(save_path)
+            print('save Importance_Map map as img {}'.format(save_path))
 
 
 def test_sum_saluency():

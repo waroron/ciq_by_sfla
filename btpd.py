@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 import cv2
 
 
@@ -189,7 +190,10 @@ def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
     return right_params, left_params
 
 
-def BTPD(S, M):
+def BTPD(S, M, **config):
+    visualization = config['visualization']
+    if visualization:
+        save_dir = config['save_dir']
     # precalc
     n_ch = S.shape[-1]
     S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
@@ -235,6 +239,27 @@ def BTPD(S, M):
                                                        index1=n_index_in_S, index2=n1_index_in_S)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+
+        if visualization:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1, projection='3d')
+            l_pixels = left_params['S']
+            r_pixels = right_params['S']
+            ax.scatter(l_pixels[:, 0], l_pixels[:, 1], l_pixels[:, 2], c='r', marker=',', label='pixels')
+            ax.scatter(r_pixels[:, 0], r_pixels[:, 1], r_pixels[:, 2], c='b', marker=',', label='pixels')
+            # 平面のplot
+
+
+            ax.set_xlabel("B")
+            ax.set_ylabel("G")
+            ax.set_zlabel("R")
+            ax.set_xlim([0, 255])
+            ax.set_ylim([0, 255])
+            ax.set_zlim([0, 255])
+
+            ax.grid()
+            plt.show()
+
         current_node.set_right(right=right)
         current_node.set_left(left=left)
 
@@ -244,6 +269,7 @@ def BTPD(S, M):
         params = leaf.get_data()
         groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
+
 
     palette = np.array(palette)
     color_palette = np.round(palette)

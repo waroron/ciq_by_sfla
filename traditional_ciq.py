@@ -4,7 +4,7 @@ from btpd import BTPD, Ueda_CIQ
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
-from proposal import CIQ_test, get_importance, ciq_eval_set
+from proposal import CIQ_test, get_importance_error, ciq_eval_set
 from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil,\
     get_allcolors_from_img
 from skimage.measure import compare_nrmse, compare_psnr
@@ -358,7 +358,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': False,
-        'importance_eval': get_importance,
+        'importance_eval': get_importance_error,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False
     }
@@ -371,7 +371,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
                 all_colors = get_allcolors_from_img(img)
-                q, root, groups = BTPD(S, m)
+                q, root, groups = BTPD(S, m, visualization=True)
                 reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
                 retrans_q = cv2.cvtColor(reshape_q, code_inverse)
                 dict = {'palette': q,
@@ -427,7 +427,7 @@ def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
         'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': True,
-        'importance_eval': get_importance,
+        'importance_eval': get_importance_error,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False
     }
@@ -455,7 +455,7 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
         'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': False,
-        'importance_eval': get_importance,
+        'importance_eval': get_importance_error,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False
     }
@@ -510,7 +510,7 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
         'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': True,
-        'importance_eval': get_importance,
+        'importance_eval': get_importance_error,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False
     }
@@ -552,7 +552,7 @@ def CIQ_test_besed_on_SM():
 
 if __name__ == '__main__':
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
-    CIQ_test_BTPD(M=[16], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[16], DIR=['sumple_img'])
-    CIQ_test_MedianCut(M=[16], DIR=['sumple_img'])
-    CIQ_test_KMeans(M=[16], DIR=['sumple_img'])
+    CIQ_test_Ueda(M=[16, 32], DIR=['sumple_img'])
+    CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img'])
+    CIQ_test_MedianCut(M=[16, 32], DIR=['sumple_img'])
+    CIQ_test_KMeans(M=[16, 32], DIR=['sumple_img'])

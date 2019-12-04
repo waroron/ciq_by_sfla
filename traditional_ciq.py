@@ -512,14 +512,15 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
         'view_importance': True,
         'importance_eval': get_importance_error,
         'ciq_error_eval': ciq_eval_set(),
-        'save_tmp_imgs': False
+        'save_tmp_imgs': False,
+        'mapping': mapping_pallet_to_img
     }
     for dir in DIR:
         for m in M:
             code = cv2.COLOR_BGR2LAB
             inverse_code = cv2.COLOR_LAB2BGR
 
-            def ciq(img):
+            def ciq(img, **ciq_status):
                 trans_img = cv2.cvtColor(img, code)
                 S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))
                 _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
@@ -553,6 +554,6 @@ def CIQ_test_besed_on_SM():
 if __name__ == '__main__':
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
     CIQ_test_Ueda(M=[16, 32], DIR=['sumple_img'])
-    CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img'])
-    CIQ_test_MedianCut(M=[16, 32], DIR=['sumple_img'])
-    CIQ_test_KMeans(M=[16, 32], DIR=['sumple_img'])
+    # CIQ_test_BTPD(M=[16, 32], DIR=['sumple_img'])
+    # CIQ_test_MedianCut(M=[16, 32], DIR=['sumple_img'])
+    # CIQ_test_KMeans(M=[16, 32], DIR=['sumple_img'])

@@ -39,6 +39,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
     view_importance = test_config['view_importance']
     ciq_error_eval = test_config['ciq_error_eval']
     importance_eval = test_config['importance_eval']
+    mapping = test_config['mapping']
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -68,11 +69,11 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
 
         if trans_flag:
             luv_img = cv2.cvtColor(img, code)
-            mapped = mapping_pallet_to_img(luv_img, palette)
+            mapped = mapping(luv_img, palette)
             mapped = np.reshape(mapped, newshape=img.shape)
             mapped = cv2.cvtColor(mapped, inverse_code)
         else:
-            mapped = mapping_pallet_to_img(img, palette)
+            mapped = mapping(img, palette)
         mapped = np.reshape(mapped, newshape=img.shape)
 
         if not os.path.isdir(save_path):

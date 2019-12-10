@@ -350,7 +350,7 @@ def test_importance_map():
 
 
 def get_all_preimportance_map():
-    DIR = 'ProposalSvSumWeight_m32_sumple_img_lim1000_LAB_orgSV'
+    DIR = 'ProposalSvSumWeight_m32_sumple_img_lim1000_LAB_sum'
     SAVE = 'Importance_Map'
     imgs = os.listdir(DIR)
 

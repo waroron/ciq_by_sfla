@@ -4,7 +4,7 @@ from btpd import BTPD, Ueda_CIQ
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
-from proposal import CIQ_test, get_importance_error, ciq_eval_set
+from proposal import CIQ_test, get_importance_error, ciq_eval_set, get_importance_error_individually_color
 from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil,\
     get_allcolors_from_img
 from skimage.measure import compare_nrmse, compare_psnr
@@ -358,7 +358,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'view_distribution': True,
         'save_tmpSM': True,
         'view_importance': False,
-        'importance_eval': get_importance_error,
+        'importance_eval': get_importance_error_individually_color,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False,
         'mapping': mapping_pallet_to_img
@@ -511,7 +511,7 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
         'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': True,
-        'importance_eval': get_importance_error,
+        'importance_eval': get_importance_error_individually_color,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False,
         'mapping': mapping_pallet_to_img

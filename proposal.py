@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.preprocessing import minmax_scale
 from skimage.measure import compare_nrmse, compare_psnr, compare_ssim
 from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors, get_spectralresidual, \
-    get_saliency_lower_th, mapping_pallet_to_img, compare_labmse, get_allcolors_from_img
+    get_saliency_lower_th, mapping_pallet_to_img, compare_labmse, get_allcolors_from_img, make_colormap
 from btpd import BTPD, SMBW_BTPD, BTPD_WTSE, BTPD_PaletteDeterminationFromSV, BTPD_InitializationFromSv, \
     BTPD_InitializationFromIncludingSv, BTPD_LimitationSv, BTPD_WTSE_LimitationSv
 import matplotlib.pyplot as plt
@@ -92,7 +92,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
 
         # Importance
         if importance_eval:
-            for statistics in ['sum_imp', 'mean_imp', 'max_imp']:
+            for statistics in ['sum_imp', 'mean_imp']:
                 importance_mat = get_img_importance(root, statistics=statistics)
                 eval_errors = importance_eval(img, mapped, importance_mat)
                 for eval_error in eval_errors:
@@ -224,8 +224,8 @@ def save_color_importanceerror(img, mapped, importance, save_path, filename):
 def get_img_importance(img_path, statistics='sum_imp'):
     SAVE = 'Importance_Map'
     img_name, ext = os.path.splitext(img_path)
-    save_path = os.path.join(SAVE, img_name, f'{img_name}.csv')
-    # save_path = os.path.join(SAVE, img_name, f'premapped_{statistics}_importance.csv.')
+    # save_path = os.path.join(SAVE, img_name, f'{img_name}.csv')
+    save_path = os.path.join(SAVE, img_name, f'premapped_{statistics}_importance.csv.')
     csv = pd.read_csv(save_path, index_col=0, dtype=np.float32)
     csv = csv / np.max(csv)
     return csv
@@ -461,8 +461,8 @@ def get_importance_error(org, mapped, importance_mat):
         importance_mat = importance_mat.values
 
     flattened_mat = importance_mat.flatten()
-    flattened_org = org.flatten()
-    flattened_mapped = mapped.flatten()
+    flattened_org = np.reshape(org, (flattened_mat.size, 3))
+    flattened_mapped = np.reshape(mapped, flattened_org.shape)
     sorted_indices = np.argsort(flattened_mat)
     sorted_indices = sorted_indices[::-1]
     sorted_mat = flattened_mat[sorted_indices]
@@ -474,6 +474,33 @@ def get_importance_error(org, mapped, importance_mat):
     for ratio in importance_top_ratio:
         th = round(len(flattened_mat) * ratio)
         nrmse = compare_nrmse(sorted_org[:th], sorted_mapped[:th])
+        eval = {'error': nrmse, 'index': f'Top Importance {ratio * 100}%'}
+        eval_list.append(eval)
+    return eval_list
+
+
+def get_importance_error_individually_color(org, mapped, importance_mat):
+    # width = org.shape[1]
+    eval_list = []
+    if type(importance_mat) == pd.DataFrame:
+        importance_mat = importance_mat.values
+
+    uniq_imp = np.unique(importance_mat)
+    sorted_imp = np.sort(uniq_imp)[::-1]
+    indices = [np.where(importance_mat == imp) for imp in sorted_imp]
+    sorted_mapped = np.array([mapped[ind] for ind in indices])
+    sorted_org = np.array([org[ind] for ind in indices])
+    n_colors = np.array([len(pixels) for pixels in sorted_org])
+    sum_p = np.sum(n_colors)
+
+    importance_top_ratio = [.01, .05, .1, .3]
+
+    for ratio in importance_top_ratio:
+        th = round(len(uniq_imp) * ratio)
+        # print(ratio)
+        current_org = np.concatenate(sorted_org[:th])
+        current_mapped = np.concatenate(sorted_mapped[:th])
+        nrmse = compare_nrmse(current_org, current_mapped)
         eval = {'error': nrmse, 'index': f'Top Importance {ratio * 100}%'}
         eval_list.append(eval)
     return eval_list
@@ -867,7 +894,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
         'view_distribution': True,
         'save_tmp_imgs': True,
         'view_importance': True,
-        'importance_eval': get_importance_error,
+        'importance_eval': get_importance_error_individually_color,
         'ciq_error_eval': ciq_eval_set(),
         'mapping': mapping_pallet_to_img
     }
@@ -936,13 +963,14 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
         'view_distribution': True,
         'save_tmp_imgs': True,
         'view_importance': True,
-        'importance_eval': get_importance_error,
+        'importance_eval': get_importance_error_individually_color,
         'ciq_error_eval': ciq_eval_set(),
         'mapping': mapping_pallet_to_img
     }
     for dir in DIR:
         for m in M:
             for lim in LIMIT:
+                test_title = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_frac'.format(m, dir, lim)
                 def ciq(img, **ciq_status):
                     trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
                     # trans_img = img.copy()
@@ -963,9 +991,17 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     # len_max = np.max([len(sv_array) for sv_array in uniq_Sv])
                     # uniq_Sv = np.array([np.mean(sv_array) * (np.sum(sv_array) / len_max) for sv_array in uniq_Sv])
                     uniq_Sv = np.array([np.sum(sv_array) for sv_array in uniq_Sv])
+                    uniq_Sv = uniq_Sv / np.max(uniq_Sv)
                     # only in case of sum
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
-                    q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
+                    q, root, groups = BTPD_WTSE(uniq_S, m, 1.0 / uniq_Sv)
+
+                    # make colormap
+                    indices = np.argsort(uniq_Sv)
+                    # reshape_S = np.reshape(uniq_S, newshape=(len(indices), 1, 3))
+                    retrans_S = cv2.cvtColor(uniq_S.astype(np.uint8), cv2.COLOR_LAB2BGR)
+                    colormap = make_colormap(retrans_S[indices])
+
                     pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
                     reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
                     retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
@@ -974,10 +1010,10 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     dict = {'palette': q,
                             'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
                             'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
-                                          {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
+                                          {'img': pre_mapped, 'filename': 'pre_mapped.jpg'},
+                                          {'img': colormap, 'filename': 'colormap.jpg'}]}
                     return dict
-                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_sum'.format(m, dir, lim)
-                CIQ_test(ciq, SAVE, test_img=dir, **test_config)
+                CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
 
 def CIQ_test_BTPD_WithImpoertance(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
@@ -1086,8 +1122,8 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    # CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[500, 1000])
+    # CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

@@ -109,7 +109,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
             df = pre_csv.append(df)
         df.to_csv(csv_path)
 
-        print('{} , by {}, calc time {}s'.format(img_path, test_name, en - st))
+        print('{}/{} {} , by {}, calc time {}s'.format(num, len(imgs), img_path, test_name, en - st))
         # mapped = mapping_pallet_to_img(img, q)
         mapped_path = os.path.join(save_path, img_path)
         cv2.imwrite(mapped_path, mapped)
@@ -224,8 +224,8 @@ def save_color_importanceerror(img, mapped, importance, save_path, filename):
 def get_img_importance(img_path, statistics='sum_imp'):
     SAVE = 'Importance_Map'
     img_name, ext = os.path.splitext(img_path)
-    # save_path = os.path.join(SAVE, img_name, f'{img_name}.csv')
-    save_path = os.path.join(SAVE, img_name, f'premapped_{statistics}_importance.csv.')
+    save_path = os.path.join(SAVE, img_name, f'{img_name}.csv')
+    # save_path = os.path.join(SAVE, img_name, f'premapped_{statistics}_importance.csv.')
     csv = pd.read_csv(save_path, index_col=0, dtype=np.float32)
     csv = csv / np.max(csv)
     return csv
@@ -868,7 +868,8 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
         'save_tmp_imgs': True,
         'view_importance': True,
         'importance_eval': get_importance_error,
-        'ciq_error_eval': ciq_eval_set()
+        'ciq_error_eval': ciq_eval_set(),
+        'mapping': mapping_pallet_to_img
     }
     for dir in DIR:
         for m in M:
@@ -891,7 +892,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
                         S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
                         uniq_S = np.unique(S, axis=0)
-                        uniq_Sv = np.round([np.sum(Sv[np.where(color == S)[0]]) / div for color in uniq_S]).astype(np.int)
+                        uniq_Sv = np.round([np.sum(Sv[np.where(np.all(color == S, axis=1))[0]]) / div for color in uniq_S]).astype(np.int)
 
                         # only in case of sum
                         uniq_Sv = (uniq_Sv / np.min(uniq_Sv)).astype(np.int)
@@ -903,7 +904,7 @@ def CIQ_test_ProposalTile(M=[16], DIR=['sumple_img'], LIMIT=[3000], DIV=[1]):
                         tile_S = np.reshape(tile_Sv, newshape=(len(tile_Sv), 1, 3))
                         print('pre quantize {} colors'.format(len(root.get_leaves())))
 
-                        q, root, groups = BTPD(tile_S, m)
+                        q, root, groups = BTPD(tile_S, m, visualization=False)
                         pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
                         reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
                         retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
@@ -961,7 +962,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     uniq_Sv = [Sv[np.where(np.all(color == S, axis=1))[0]] for color in uniq_S]
                     # len_max = np.max([len(sv_array) for sv_array in uniq_Sv])
                     # uniq_Sv = np.array([np.mean(sv_array) * (np.sum(sv_array) / len_max) for sv_array in uniq_Sv])
-                    uniq_Sv = np.array([np.mean(sv_array) for sv_array in uniq_Sv])
+                    uniq_Sv = np.array([np.sum(sv_array) for sv_array in uniq_Sv])
                     # only in case of sum
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
                     q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
@@ -975,7 +976,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                             'save_imgs': [{'img': Sv_map, 'filename': 'tmp_Sv.jpg'},
                                           {'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]}
                     return dict
-                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_mean'.format(m, dir, lim)
+                SAVE = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_sum'.format(m, dir, lim)
                 CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
@@ -1085,8 +1086,8 @@ if __name__ == '__main__':
     # CIQ_test_gradually()
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
-    # CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1000])
+    CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
+    # CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[500, 1000])
     # CIQ_test_BTPD_SVcount_withoutPreQuantization(M=[16, 32], DIR=['sumple_img'], DIV=[1, 4, 256])
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],

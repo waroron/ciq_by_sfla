@@ -229,6 +229,7 @@ def get_allcolors_from_img(img):
     uniq_S = np.unique(flattened_img, axis=0)
     return uniq_S
 
+
 def get_numcolors(img):
     if len(img.shape) > 2:
         img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], img.shape[2]))

@@ -203,6 +203,7 @@ def make_colormap(colors, color_width=64):
 
 
 def get_importancemap(img):
+    # lin_img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3))
     lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
 
@@ -210,13 +211,15 @@ def get_importancemap(img):
     mean_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
     max_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
     all_colors = get_allcolors_from_img(img)
-    colors_sv_array = [sm[np.where(color == img)[:2]] for color in all_colors]
+    # tmp = np.where(np.all(all_colors[0] == img, axis=2))
+    # pix = img[tmp]
+    colors_sv_array = [sm[np.where(np.all(color == img, axis=2))] for color in all_colors]
     sum_importance = np.array([np.sum(sm_array) for sm_array in colors_sv_array])
     mean_importance = np.array([np.mean(sm_array) for sm_array in colors_sv_array])
     max_importance = np.array([np.max(sm_array) for sm_array in colors_sv_array])
 
     for n, color in enumerate(all_colors):
-        index = np.where(color == img)
+        index = np.where(np.all(color == img, axis=2))
         sum_imp_mat[index[:2]] = sum_importance[n]
         mean_imp_mat[index[:2]] = mean_importance[n]
         max_imp_mat[index[:2]] = max_importance[n]
@@ -225,7 +228,8 @@ def get_importancemap(img):
 
 
 def get_allcolors_from_img(img):
-    flattened_img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 3)).astype(np.uint8)
+    flattened_img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint8)
+    # flattened_img[1] = flattened_img[0]
     uniq_S = np.unique(flattened_img, axis=0)
     return uniq_S
 

@@ -355,7 +355,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'trans_flag': True,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': True,
+        'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': False,
         'importance_eval': get_importance_error_individually_color,

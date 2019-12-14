@@ -970,7 +970,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
     for dir in DIR:
         for m in M:
             for lim in LIMIT:
-                test_title = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_frac'.format(m, dir, lim)
+                test_title = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB_sum'.format(m, dir, lim)
                 def ciq(img, **ciq_status):
                     trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
                     # trans_img = img.copy()
@@ -994,7 +994,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                     uniq_Sv = uniq_Sv / np.max(uniq_Sv)
                     # only in case of sum
                     print('pre quantize {} colors'.format(len(root.get_leaves())))
-                    q, root, groups = BTPD_WTSE(uniq_S, m, 1.0 / uniq_Sv)
+                    q, root, groups = BTPD_WTSE(uniq_S, m, uniq_Sv)
 
                     # make colormap
                     indices = np.argsort(uniq_Sv)

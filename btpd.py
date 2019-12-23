@@ -93,6 +93,13 @@ class RootNode(Node):
 
         return bottom_left
 
+    def get_all_nodes(self):
+        self.nodes = []
+        def append_node(node):
+            self.nodes.append(node)
+
+        self.preorder(append_node)
+        return self.nodes
 
 class SubNode(Node):
     def __init__(self, root, parent=None, data=None, height=None):

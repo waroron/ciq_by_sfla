@@ -294,11 +294,13 @@ def BTPD_LimitationSv(S, limit):
     root = RootNode(parent=None, data=params)
     palette = []
     max_ev = np.inf
+    ev_list = []
     num = 0
     while limit < max_ev:
         leaves = root.set_leaves()
         max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
         max_ev = np.max(max_ev_arr)
+        ev_list.append(max_ev)
         current_node = leaves[int(np.argmax(max_ev_arr))]
 
         data = current_node.get_data()
@@ -345,7 +347,7 @@ def BTPD_LimitationSv(S, limit):
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root, np.array(groups)
+    return color_palette, root, np.array(groups), ev_list
 
 
 def BTPD_WTSE(S, M, Sv):

@@ -3,6 +3,7 @@ import os
 import cv2
 import time
 import pandas as pd
+from pathlib import Path
 from sklearn.preprocessing import minmax_scale
 from skimage.measure import compare_nrmse, compare_psnr, compare_ssim
 from img_util import get_saliency_upper_th, make_colormap, get_saliency_hist, get_numcolors, get_spectralresidual, \
@@ -1093,7 +1094,7 @@ def CIQ_test_ProposalSvSumWeight(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
                 CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
 
-def CIQ_test_PreQuantization(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
+def CIQ_test_PreQuantization(M=[16], DIR=['sumple_img']):
     """
     重要度を，合計顕著度ではなく，その色の中で最大の顕著度とする
     :param M:
@@ -1107,7 +1108,7 @@ def CIQ_test_PreQuantization(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
         'view_distribution': False,
-        'save_tmp_imgs': False,
+        'save_tmp_imgs': True,
         'view_importance': False,
         'importance_eval': False,
         'ciq_error_eval': ciq_eval_set(),
@@ -1115,40 +1116,99 @@ def CIQ_test_PreQuantization(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
     }
     for dir in DIR:
         for m in M:
-            for lim in LIMIT:
-                test_title = 'ProposalSvSumWeight_m{}_{}_lim{}_LAB'.format(m, dir, lim)
+            test_title = 'PreCIQ_m{}_{}_btpd'.format(m, dir)
+            def ciq(img, **ciq_status):
+                trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                # trans_img = img.copy()
+                org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                # pre quantize
+                status = {}
+                pre_q, root, pre_groups = BTPD(S, m * 16, visualization=False)
+                pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
+                print(f'{len(np.unique(org_S, axis=0))}')
+                S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                # only in case of sum
+                print('pre quantize {} colors'.format(len(root.get_leaves())))
+                q, root, groups = BTPD(S, m, visualization=False)
+                # groupsから分割色の保存
+                save_imgs = []
+                pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
+                reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
+                retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
+                reshape_pre_q = np.reshape(pre_q, newshape=(len(pre_q), 1, 3)).astype(np.uint8)
+                retrans_pre_q = cv2.cvtColor(reshape_pre_q, cv2.COLOR_LAB2BGR)
+                save_imgs.extend(
+                    [{'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]
+                )
+                dict = {'palette': q,
+                        'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
+                        'save_imgs': save_imgs}
+                return dict
+            CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
-                def ciq(img, **ciq_status):
-                    trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-                    # trans_img = img.copy()
-                    org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                    S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                    # pre quantize
-                    pre_q, root, pre_groups = BTPD(S, m * 16)
-                    pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
-                    print(f'{len(np.unique(org_S, axis=0))}')
-                    S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
-                    # only in case of sum
-                    print('pre quantize {} colors'.format(len(root.get_leaves())))
-                    q, root, groups = BTPD(S, m)
 
-                    # groupsから分割色の保存
-                    save_imgs = []
-                    pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
-                    reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
-                    retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
-                    reshape_pre_q = np.reshape(pre_q, newshape=(len(pre_q), 1, 3)).astype(np.uint8)
-                    retrans_pre_q = cv2.cvtColor(reshape_pre_q, cv2.COLOR_LAB2BGR)
-
-                    save_imgs.extend(
-                        [{'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]
-                    )
-
-                    dict = {'palette': q,
-                            'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
-                            'save_imgs':save_imgs}
-                    return dict
-                CIQ_test(ciq, test_title, test_img=dir, **test_config)
+def CIQ_test_PreQuantization_grad(M=[16], DIR=['sumple_img']):
+    """
+    重要度を，合計顕著度ではなく，その色の中で最大の顕著度とする
+    :param M:
+    :param DIR:
+    :param PRE_Q:
+    :param DIV:
+    :return:
+    """
+    test_config = {
+        'trans_flag': True,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmp_imgs': True,
+        'view_importance': False,
+        'importance_eval': False,
+        'ciq_error_eval': ciq_eval_set(),
+        'mapping': mapping_pallet_to_img
+    }
+    for dir in DIR:
+        for m in M:
+            test_title = 'PreCIQ_m{}_{}_btpdgrad'.format(m, dir)
+            def ciq(img, **ciq_status):
+                trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                # trans_img = img.copy()
+                org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                # pre quantize
+                pre_q, root, pre_groups, ev_list = BTPD_LimitationSv(S, 500)
+                pre_mapped = mapping_pallet_to_img(trans_img, pre_q)
+                print(f'{len(np.unique(org_S, axis=0))}')
+                S = np.reshape(pre_mapped, newshape=(len(S), 1, 3)).astype(np.uint64)
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                ev_list = ev_list[100:]
+                num = 5
+                ave = np.convolve(ev_list, np.ones(num) / float(num), 'valid')
+                x = np.arange(0, len(ave), 1)
+                ax.scatter(x, ave, marker='.', s=10)
+                img_name = ciq_status['img_path']
+                Path(f'{test_title}/{img_name}').mkdir(parents=True, exist_ok=True)
+                plt.savefig(f'{test_title}/{img_name}/ex_list.jpg')
+                # only in case of sum
+                print('pre quantize {} colors'.format(len(root.get_leaves())))
+                q, root, groups = BTPD(S, m, visualization=False)
+                # groupsから分割色の保存
+                save_imgs = []
+                pre_mapped = cv2.cvtColor(pre_mapped, cv2.COLOR_LAB2BGR)
+                reshape_q = np.reshape(q, newshape=(m, 1, 3)).astype(np.uint8)
+                retrans_q = cv2.cvtColor(reshape_q, cv2.COLOR_LAB2BGR)
+                reshape_pre_q = np.reshape(pre_q, newshape=(len(pre_q), 1, 3)).astype(np.uint8)
+                retrans_pre_q = cv2.cvtColor(reshape_pre_q, cv2.COLOR_LAB2BGR)
+                save_imgs.extend(
+                    [{'img': pre_mapped, 'filename': 'pre_mapped.jpg'}]
+                )
+                dict = {'palette': q,
+                        'groups': [retrans_pre_q[:, 0, :], retrans_q[:, 0, :]],
+                        'save_imgs': save_imgs}
+                return dict
+            CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
 
 def CIQ_test_ProposalRemoveQuantile(M=[16], DIR=['sumple_img'], LIMIT=[3000]):
@@ -1334,7 +1394,8 @@ if __name__ == '__main__':
     # CIQ_test_BTPD_MyPreQuantizeandSVcount(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000], DIV=[32])
     # CIQ_test_BTPD_PreQuantizeandSVcount(M=[16, 32, 64], DIR=['sumple_img', 'misc'], PRE_Q=[128, 256, 512],
     #                                     DIV=[128, 256, 512])
-    CIQ_test_PreQuantization(M=[16, 32, 64], DIR=['sumple_img', 'sumple_org'],)
+    CIQ_test_PreQuantization_grad(M=[16], DIR=['sumple_img', 'sumple_org'])
+    # CIQ_test_PreQuantization(M=[16, 32, 64], DIR=['sumple_img', 'sumple_org'])
     # CIQ_test_BTPD_PreQuantize(M=[16, 32], DIR=['sumple_img'], LIMIT=[3000, 4000], weighting=True)
     # CIQ_test_BTPD_PaletteDeterminationFromSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_includingSv(M=[16, 32, 64], DIR=['sumple_img', 'misc'])

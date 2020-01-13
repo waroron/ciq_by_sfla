@@ -283,7 +283,7 @@ def BTPD(S, M, **config):
     return color_palette, root, np.array(groups)
 
 
-def BTPD_LimitationSv(S, limit):
+def BTPD_LimitationSv(S, limit, mode='Constant'):
     # precalc
     n_ch = S.shape[-1]
     S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
@@ -296,10 +296,18 @@ def BTPD_LimitationSv(S, limit):
     max_ev = np.inf
     ev_list = []
     num = 0
-    while limit < max_ev:
+    if mode == 'Constant':
+        lim = limit
+    else:
+        lim = -1
+
+    while lim < max_ev:
         leaves = root.set_leaves()
         max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
         max_ev = np.max(max_ev_arr)
+        if lim < 0:
+            lim = limit * max_ev
+
         ev_list.append(max_ev)
         current_node = leaves[int(np.argmax(max_ev_arr))]
 
@@ -425,7 +433,7 @@ def BTPD_WTSE(S, M, Sv):
     return color_palette, root, np.array(groups)
 
 
-def BTPD_WTSE_LimitationSv(S, Sv, limit):
+def BTPD_WTSE_LimitationSv(S, Sv, limit, mode='Constant'):
     # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
     Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
@@ -439,10 +447,18 @@ def BTPD_WTSE_LimitationSv(S, Sv, limit):
     palette = []
     max_ev = np.inf
     num = 0
-    while limit < max_ev:
+    if mode == 'Constant':
+        lim = limit
+    else:
+        lim = -1
+
+    while lim < max_ev:
         leaves = root.set_leaves()
         max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
         max_ev = np.max(max_ev_arr)
+        if lim < 0:
+            lim = limit * max_ev
+
         current_node = leaves[int(np.argmax(max_ev_arr))]
 
         data = current_node.get_data()

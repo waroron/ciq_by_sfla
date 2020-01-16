@@ -546,9 +546,9 @@ def CIQ_test_Ueda(M=[16], DIR=['sumple_img']):
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
         'view_distribution': False,
-        'save_tmpSM': True,
-        'view_importance': True,
-        'importance_eval': get_importance_error_individually_color,
+        'save_tmpSM': False,
+        'view_importance': False,
+        'importance_eval': False,
         'ciq_error_eval': ciq_eval_set(),
         'save_tmp_imgs': False,
         'mapping': mapping_pallet_to_img
@@ -622,8 +622,8 @@ def CIQ_test_FCMeans(M=[16], DIR=['sumple_img']):
 
 if __name__ == '__main__':
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
-    # CIQ_test_Ueda(M=[16, 32], DIR=['sumple_img'])
-    CIQ_test_FCMeans(M=[16], DIR=['sumple_img'])
+    CIQ_test_Ueda(M=[16, 32], DIR=['sumple_img'])
+    # CIQ_test_FCMeans(M=[16], DIR=['sumple_img'])
     # CIQ_test_BTPD(M=[2], DIR=['resized_sumple'])
     # CIQ_test_MedianCut(M=[2], DIR=['resized_sumple'])
     # CIQ_test_KMeans(M=[16], DIR=['sumple_img'])

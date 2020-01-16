@@ -503,14 +503,16 @@ def BTPD_WTSE_LimitationSv(S, Sv, limit, mode='Constant'):
 
     leaves = root.set_leaves()
     groups = []
+    sv_groups = []
     for leaf in leaves:
         params = leaf.get_data()
         groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
+        sv_groups.append(np.reshape(params['Sv'], newshape=(len(params['Sv']), 1)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root, np.array(groups)
+    return color_palette, root, np.array(groups), sv_groups
 
 
 def BTPD_PaletteDeterminationFromSV(S, M, Sv):

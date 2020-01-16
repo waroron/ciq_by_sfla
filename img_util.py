@@ -243,7 +243,7 @@ def get_numcolors(img):
 
 def test_saliency_map():
     DIR = 'sumple_img'
-    SAVE = 'SM_map_spectralresidual'
+    SAVE = 'SM_map_spectralresidual_LAB'
     imgs = os.listdir(DIR)
     R = np.arange(1.0, 0, -0.1)
     PART = 8
@@ -255,7 +255,7 @@ def test_saliency_map():
         path = os.path.join(DIR, img_path)
         org_img = cv2.imread(path)
         img = org_img.copy()
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         root, ext = os.path.splitext(img_path)
         img_dir = os.path.join(SAVE, root)
 

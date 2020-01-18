@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 import pySaliencyMap
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 import pandas as pd
 from PIL import Image
 from skimage.measure import compare_nrmse, compare_psnr
@@ -181,6 +181,35 @@ def mapping_pallet_to_img(img, pallete):
     return mapped_img
 
 
+
+def find_closest_color(pix, source):
+    tile = np.tile(pix, len(source)).reshape(source.shape)
+    dist = np.linalg.norm(tile - source, axis=2)
+    index = np.argmin(dist)
+    return source[index]
+
+
+
+def FloydSteinbergDithering(img, palette):
+    height, width = img.shape[0], img.shape[1]
+    org = img.copy()
+    for y in range(height):
+        for x in range(width):
+            closest = find_closest_color(org[y, x], palette)
+            org[y, x] = closest
+            q_err = org[y, x] - closest
+
+            if x < width - 1:
+                org[y, x + 1] = org[y, x + 1] + (7.0 * q_err) / 16
+            if y < height - 1:
+                org[y + 1, x] = org[y + 1, x] + (5.0 * q_err) / 16
+                if x > 0:
+                    org[y + 1, x - 1] = org[y + 1, x - 1] + (3.0 * q_err) / 16
+                if x < width - 1:
+                    org[y + 1, x + 1] = org[y + 1, x + 1] + q_err / 16.0
+    return org
+
+
 def make_colormap(colors, color_width=64):
     width_n_colors = int(np.sqrt(len(colors)) + 0.5)
     map_width = width_n_colors * color_width
@@ -203,20 +232,35 @@ def make_colormap(colors, color_width=64):
 
 
 def get_importancemap(img):
+    # lin_img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3))
     lab_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     hist, bins, sm = get_saliency_hist(lab_img, sm='SR')
 
-    imp_img = np.zeros(shape=(img.shape[0], img.shape[1]))
-    sm = np.reshape(sm, newshape=(img.shape[0] * img.shape[1], 1)).astype(np.float32)
-    S = np.reshape(img,  newshape=(len(sm), 1, 3)).astype(np.uint64)
-    uniq_S = np.unique(S, axis=0)
-    importance = np.round([np.median(sm[np.where(color == S)[0]]) for color in uniq_S]).astype(np.int)
+    sum_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
+    mean_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
+    max_imp_mat = np.zeros(shape=(img.shape[0], img.shape[1]))
+    all_colors = get_allcolors_from_img(img)
+    # tmp = np.where(np.all(all_colors[0] == img, axis=2))
+    # pix = img[tmp]
+    colors_sv_array = [sm[np.where(np.all(color == img, axis=2))] for color in all_colors]
+    sum_importance = np.array([np.sum(sm_array) for sm_array in colors_sv_array])
+    mean_importance = np.array([np.mean(sm_array) for sm_array in colors_sv_array])
+    max_importance = np.array([np.max(sm_array) for sm_array in colors_sv_array])
 
-    for color, imp in zip(uniq_S, importance):
-        index = np.where(color == img)
-        imp_img[index[:2]] = imp
+    for n, color in enumerate(all_colors):
+        index = np.where(np.all(color == img, axis=2))
+        sum_imp_mat[index[:2]] = sum_importance[n]
+        mean_imp_mat[index[:2]] = mean_importance[n]
+        max_imp_mat[index[:2]] = max_importance[n]
 
-    return imp_img
+    return sum_imp_mat, mean_imp_mat, max_imp_mat
+
+
+def get_allcolors_from_img(img):
+    flattened_img = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint8)
+    # flattened_img[1] = flattened_img[0]
+    uniq_S = np.unique(flattened_img, axis=0)
+    return uniq_S
 
 
 def get_numcolors(img):
@@ -232,6 +276,7 @@ def test_saliency_map():
     imgs = os.listdir(DIR)
     R = np.arange(1.0, 0, -0.1)
     PART = 8
+    plt.rcParams["font.size"] = 14
 
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
@@ -294,10 +339,11 @@ def test_saliency_map():
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         ax.hist(liner_sm, bins=256)
-        ax.set_title('{} saliency map(spectralresidual)'.format(img_path))
+        ax.set_title('{} saliency map'.format(img_path))
         ax.set_xlabel('saliency')
-        ax.set_ylabel('number')
-        save_fig = os.path.join(img_dir, 'SM_' + img_path.replace(ext, 'png'))
+        ax.set_ylabel('# of pixels')
+        save_fig = os.path.join(img_dir, 'SM_' + img_path.replace(ext, '.jpg'))
+        plt.tight_layout()
         plt.savefig(save_fig)
         print('save histogram as img {}'.format(save_fig))
 
@@ -320,7 +366,7 @@ def test_importance_map():
     if not os.path.isdir(SAVE):
         os.mkdir(SAVE)
 
-    for num, img_path in enumerate(imgs[5:]):
+    for num, img_path in enumerate(imgs):
         path = os.path.join(DIR, img_path)
         org_img = cv2.imread(path)
         img = org_img.copy()
@@ -330,11 +376,40 @@ def test_importance_map():
 
         if not os.path.isdir(img_dir):
             os.mkdir(img_dir)
-        # saliency mapの保存
-        saliency_map = get_importancemap(img)
-        save_path = os.path.join(img_dir, img_path)
-        cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
+        # importance mapの保存
+        importance_map = get_importancemap(img)
+        save_path = os.path.join(img_dir, f'{root}.csv')
+        df = pd.DataFrame(importance_map)
+        df.to_csv(save_path)
         print('save Importance_Map map as img {}'.format(save_path))
+
+
+def get_all_preimportance_map():
+    DIR = 'ProposalSvSumWeight_m32_sumple_img_lim1000_LAB_sum'
+    SAVE = 'Importance_Map'
+    imgs = os.listdir(DIR)
+
+    if not os.path.isdir(SAVE):
+        os.mkdir(SAVE)
+
+    for num, img_path in enumerate(imgs):
+        path = os.path.join(DIR, img_path)
+        org_img = cv2.imread(f'{path}/pre_mapped.jpg')
+        img = org_img.copy()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        root, ext = os.path.splitext(img_path)
+        img_dir = os.path.join(SAVE, root)
+
+        if not os.path.isdir(img_dir):
+            os.mkdir(img_dir)
+        # importance mapの保存
+        sum_imp, mean_imp, max_imp = get_importancemap(img)
+        labels = ['sum_imp', 'mean_imp', 'max_imp']
+        for imp_mat, label in zip([sum_imp, mean_imp, max_imp], labels):
+            save_path = os.path.join(img_dir, f'premapped_{label}_importance.csv')
+            df = pd.DataFrame(imp_mat)
+            df.to_csv(save_path)
+            print('save Importance_Map map as img {}'.format(save_path))
 
 
 def test_sum_saluency():
@@ -444,6 +519,8 @@ if __name__ == '__main__':
     # bmp2jpg()
     # test_sum_saluency()
     # test_smextraction()
-    test_importance_map()
-    # test_saliency_map()
+    # test_importance_map()
+    # get_all_preimportance_map()
+    # test_importance_map()
+    test_saliency_map()
     # test_sm_variance()

@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 import cv2
 
 
@@ -91,6 +92,14 @@ class RootNode(Node):
             bottom_left = bottom_left.get_left()
 
         return bottom_left
+
+    def get_all_nodes(self):
+        self.nodes = []
+        def append_node(node):
+            self.nodes.append(node)
+
+        self.preorder(append_node)
+        return self.nodes
 
 
 class SubNode(Node):
@@ -189,7 +198,10 @@ def get_params_for_bst_with_weight(S1, S2, Sv1, weighted_r1, weighted_m1,
     return right_params, left_params
 
 
-def BTPD(S, M):
+def BTPD(S, M, **config):
+    visualization = config['visualization']
+    if visualization:
+        save_dir = config['save_dir']
     # precalc
     n_ch = S.shape[-1]
     S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
@@ -235,6 +247,27 @@ def BTPD(S, M):
                                                        index1=n_index_in_S, index2=n1_index_in_S)
         right = SubNode(parent=current_node, data=right_params, height=num + 1, root=root)
         left = SubNode(parent=current_node, data=left_params, height=num + 1, root=root)
+
+        if visualization:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1, projection='3d')
+            l_pixels = left_params['S']
+            r_pixels = right_params['S']
+            ax.scatter(l_pixels[:, 0], l_pixels[:, 1], l_pixels[:, 2], c='r', marker=',', label='pixels')
+            ax.scatter(r_pixels[:, 0], r_pixels[:, 1], r_pixels[:, 2], c='b', marker=',', label='pixels')
+            # 平面のplot
+
+
+            ax.set_xlabel("B")
+            ax.set_ylabel("G")
+            ax.set_zlabel("R")
+            ax.set_xlim([0, 255])
+            ax.set_ylim([0, 255])
+            ax.set_zlim([0, 255])
+
+            ax.grid()
+            plt.show()
+
         current_node.set_right(right=right)
         current_node.set_left(left=left)
 
@@ -245,12 +278,13 @@ def BTPD(S, M):
         groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
         palette.append(params['q'])
 
+
     palette = np.array(palette)
     color_palette = np.round(palette)
     return color_palette, root, np.array(groups)
 
 
-def BTPD_LimitationSv(S, limit):
+def BTPD_LimitationSv(S, limit, mode='Constant'):
     # precalc
     n_ch = S.shape[-1]
     S = np.reshape(S, newshape=(len(S), 1, n_ch)).astype(np.uint64)
@@ -261,11 +295,21 @@ def BTPD_LimitationSv(S, limit):
     root = RootNode(parent=None, data=params)
     palette = []
     max_ev = np.inf
+    ev_list = []
     num = 0
-    while limit < max_ev:
+    if mode == 'Constant':
+        lim = limit
+    else:
+        lim = -1
+
+    while lim < max_ev:
         leaves = root.set_leaves()
         max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
         max_ev = np.max(max_ev_arr)
+        if lim < 0:
+            lim = limit * max_ev
+
+        ev_list.append(max_ev)
         current_node = leaves[int(np.argmax(max_ev_arr))]
 
         data = current_node.get_data()
@@ -312,7 +356,7 @@ def BTPD_LimitationSv(S, limit):
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root, np.array(groups)
+    return color_palette, root, np.array(groups), ev_list
 
 
 def BTPD_WTSE(S, M, Sv):
@@ -390,7 +434,7 @@ def BTPD_WTSE(S, M, Sv):
     return color_palette, root, np.array(groups)
 
 
-def BTPD_WTSE_LimitationSv(S, Sv, limit):
+def BTPD_WTSE_LimitationSv(S, Sv, limit, mode='Constant'):
     # precalc
     S = np.reshape(S, newshape=(len(S), 1, 3)).astype(np.uint32)
     Sv = np.reshape(Sv, newshape=(len(S), 1, 1)).astype(np.float32)
@@ -404,10 +448,18 @@ def BTPD_WTSE_LimitationSv(S, Sv, limit):
     palette = []
     max_ev = np.inf
     num = 0
-    while limit < max_ev:
+    if mode == 'Constant':
+        lim = limit
+    else:
+        lim = -1
+
+    while lim < max_ev:
         leaves = root.set_leaves()
         max_ev_arr = np.array([leaf.get_data()['max_ev'] for leaf in leaves])
         max_ev = np.max(max_ev_arr)
+        if lim < 0:
+            lim = limit * max_ev
+
         current_node = leaves[int(np.argmax(max_ev_arr))]
 
         data = current_node.get_data()
@@ -452,14 +504,16 @@ def BTPD_WTSE_LimitationSv(S, Sv, limit):
 
     leaves = root.set_leaves()
     groups = []
+    sv_groups = []
     for leaf in leaves:
         params = leaf.get_data()
         groups.append(np.reshape(params['S'], newshape=(len(params['S']), 3)))
+        sv_groups.append(np.reshape(params['Sv'], newshape=(len(params['Sv']), 1)))
         palette.append(params['q'])
 
     palette = np.array(palette)
     color_palette = np.round(palette)
-    return color_palette, root, np.array(groups)
+    return color_palette, root, np.array(groups), sv_groups
 
 
 def BTPD_PaletteDeterminationFromSV(S, M, Sv):

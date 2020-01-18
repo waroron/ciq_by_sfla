@@ -294,7 +294,7 @@ def test_saliency_map():
         # saliency mapの保存
         saliency_map = get_spectralresidual(img)
         liner_sm = np.reshape(saliency_map, newshape=(img.shape[0] * img.shape[1]))
-        save_path = os.path.join(img_dir, img_path)
+        save_path = os.path.join(img_dir, f'Smap_{root}{ext}')
         cv2.imwrite(save_path, (saliency_map * 1).astype(np.uint8))
         print('save saliency map as img {}'.format(save_path))
 

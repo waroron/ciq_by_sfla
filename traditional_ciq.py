@@ -385,7 +385,7 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
         'trans_flag': True,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': True,
+        'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': False,
         'importance_eval': False,
@@ -455,8 +455,8 @@ def CIQ_test_KMeans(M=[16], DIR=['sumple_img']):
         'trans_flag': False,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': True,
-        'save_tmpSM': True,
+        'view_distribution': False,
+        'save_tmpSM': False,
         'view_importance': False,
         'importance_eval': False,
         'ciq_error_eval': ciq_eval_set(),
@@ -488,7 +488,7 @@ def CIQ_test_MedianCut(M=[16], DIR=['sumple_img']):
         'trans_flag': False,
         'trans_code': cv2.COLOR_BGR2LAB,
         'trans_inverse_code': cv2.COLOR_LAB2BGR,
-        'view_distribution': True,
+        'view_distribution': False,
         'save_tmpSM': True,
         'view_importance': False,
         'importance_eval': False,
@@ -622,8 +622,8 @@ def CIQ_test_FCMeans(M=[16], DIR=['sumple_img']):
 
 if __name__ == '__main__':
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
-    CIQ_test_Ueda(M=[16, 32], DIR=['sumple_img'])
-    # CIQ_test_FCMeans(M=[16], DIR=['sumple_img'])
-    # CIQ_test_BTPD(M=[2], DIR=['resized_sumple'])
-    # CIQ_test_MedianCut(M=[2], DIR=['resized_sumple'])
-    # CIQ_test_KMeans(M=[16], DIR=['sumple_img'])
+    # CIQ_test_Ueda(M=[16, 36], DIR=['sumple_img'])
+    CIQ_test_FCMeans(M=[16, 36], DIR=['sumple_img'])
+    # CIQ_test_BTPD(M=[16, 36], DIR=['sumple_img'])
+    # CIQ_test_MedianCut(M=[16, 36], DIR=['sumple_img'])
+    # CIQ_test_KMeans(M=[16, 36], DIR=['sumple_img'])

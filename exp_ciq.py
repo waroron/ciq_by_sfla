@@ -112,7 +112,7 @@ def CIQ_test(ciq, test_name, test_img='sumple_img', **test_config):
 
         print('{}/{} {} , by {}, calc time {}s'.format(num, len(imgs), img_path, test_name, en - st))
         # mapped = mapping_pallet_to_img(img, q)
-        mapped_path = os.path.join(save_path, img_path)
+        mapped_path = os.path.join(save_path, f'result_{img_path}')
         cv2.imwrite(mapped_path, mapped)
 
         # save color map
@@ -1354,12 +1354,12 @@ def CIQ_test_ImpLenMean(M=[16], DIR=['sumple_img'], LIMIT=[1e-4]):
         'view_importance': False,
         'importance_eval': False,
         'ciq_error_eval': ciq_eval_set(),
-        'mapping': FloydSteinbergDithering
+        'mapping': mapping_pallet_to_img
     }
     for dir in DIR:
         for m in M:
             for lim in LIMIT:
-                test_title = 'ImpLenMean_m{}_{}_lim{}_Dither'.format(m, dir, lim)
+                test_title = 'ImpLenMean_m{}_{}_lim{}'.format(m, dir, lim)
                 def ciq(img, **ciq_status):
                     trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
                     # trans_img = img.copy()
@@ -1700,9 +1700,9 @@ if __name__ == '__main__':
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    # CIQ_test_BTPD_withSv(M=[16, 32], DIR=['sumple_img'], W=[1.0, 2.0, 3.0, 4.0])
+    CIQ_test_BTPD_withSv(M=[16, 36], DIR=['sumple_img'], W=[1.0, 2.0, 3.0])
     # CIQ_test_SWBTPD(M=[16, 32], DIR=['sumple_img'], Q=[0.7, 0.8, 0.9])
-    CIQ_test_ImpLenMean(M=[16, 32, 64], DIR=['sumple_img'], LIMIT=[1e-4])
+    CIQ_test_ImpLenMean(M=[16, 36], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5])
     # CIQ_test_ImpQuantile(M=[16, 32], DIR=['sumple_img'], STEP=[0.01, 0.05, 0.1], LIMIT=[1e-4, 5e-5])
     # CIQ_test_ProposalImp(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5], W=[1.0, 2.0, 3.0])
     # CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5])

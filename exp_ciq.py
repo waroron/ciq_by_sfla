@@ -1702,7 +1702,7 @@ if __name__ == '__main__':
     # CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
     # CIQ_test_BTPD_withSv(M=[16, 32], DIR=['sumple_img'], W=[1.0, 2.0, 3.0, 4.0])
     # CIQ_test_SWBTPD(M=[16, 32], DIR=['sumple_img'], Q=[0.7, 0.8, 0.9])
-    CIQ_test_ImpLenMean(M=[16, 32, 64], DIR=['sumple_img'], LIMIT=[1e-4])
+    CIQ_test_ImpLenMean(M=[16, 32, 64], DIR=['imas_img'], LIMIT=[1e-4])
     # CIQ_test_ImpQuantile(M=[16, 32], DIR=['sumple_img'], STEP=[0.01, 0.05, 0.1], LIMIT=[1e-4, 5e-5])
     # CIQ_test_ProposalImp(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5], W=[1.0, 2.0, 3.0])
     # CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5])

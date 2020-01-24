@@ -6,13 +6,14 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from exp_ciq import CIQ_test, get_importance_error, ciq_eval_set, get_importance_error_individually_color
 from img_util import mapping_pallet_to_img, compare_labmse, get_saliency_hist, get_saliency_upper_th, pil2cv, cv2pil,\
-    get_allcolors_from_img
+    get_allcolors_from_img, FloydSteinbergDithering, make_colormap
 from skimage.measure import compare_nrmse, compare_psnr
 from skfuzzy.cluster import cmeans
 import pandas as pd
 import os
 import time
 from mediancut import median_cut
+from pathlib import Path
 
 
 def SFLA(fit, create_frog, n_frogs=20, n_mem=5, T_max=100, J_max=5, rho=0.5):
@@ -362,10 +363,17 @@ def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2, w
     # norm
     # img = img / 255.0
 
-    def fit(mapped):
+    def fit(q):
         # 論文とは違う評価方法になってるが，たぶん論文の方は記述ミス
         # 要確認
-        return compare_labmse(img, mapped)
+        if with_dither:
+            mapped = FloydSteinbergDithering(img, q)
+            mapped = cv2.GaussianBlur(mapped, ksize=(3, 3), sigmaX=0.5)
+        else:
+            mapped = mapping_pallet_to_img(img, q)
+
+        eval = compare_psnr(img, mapped)
+        return eval
 
     def update_particle(x, y, y_, pre_v):
         # 論文内の数式によると，更新する粒子がベクトルで表現されているが，実際には(K, 3)の行列であるため，
@@ -391,8 +399,7 @@ def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2, w
                 particles[num] = kmeans.cluster_centers_
 
             # calculate fitness
-            mapped = mapping_pallet_to_img(img, particles[num])
-            Fitness[num] = fit(mapped)
+            Fitness[num] = fit(particles[num])
         # Find the global best solution
         best_index = np.argmax(Fitness)
         best_particle[t] = particles[best_index]
@@ -480,6 +487,32 @@ def CIQ_test_PSO(M=[16], DIR=['sumple_img']):
 
             SAVE = 'PSO_CIQ_M{}_{}_RGB'.format(m, dir)
             CIQ_test(ciq, SAVE, dir, **test_config)
+
+
+def Dither_test_PSO(M=[16], DIR=['sumple_img']):
+    t_max = 50
+    n_p = 20
+    p_kmeans = 0.5
+    kmeans_iteration = 5
+    w = 0.729
+    c1 = 1.4955
+    c2 = 1.4955
+
+    for dir in DIR:
+        img_path_list = os.listdir(dir)
+        for img_path in img_path_list:
+            img = cv2.imread(f'{dir}/{img_path}')
+            for m in M:
+                SAVE = 'PSO_CIQ_Dither_M{}_{}_RGB'.format(m, dir)
+                Path(SAVE).mkdir(parents=True, exist_ok=True)
+
+                palette = PSO_CIQ(img, m, n_p, t_max, p_kmeans, kmeans_iteration, w, c1, c2, with_dither=True)
+                color_map = make_colormap(palette)
+
+                mapped = FloydSteinbergDithering(img, palette)
+                cv2.imwrite(f'{SAVE}/mapped.png', mapped)
+                cv2.imwrite(f'{SAVE}/color_map.png', color_map)
+                print(f'mapped {img_path}')
 
 
 def CIQ_test_Wu():
@@ -672,7 +705,8 @@ def CIQ_test_FCMeans(M=[16], DIR=['sumple_img']):
 
 
 if __name__ == '__main__':
-    CIQ_test_PSO(M=[16], DIR=['sumple_img'])
+    Dither_test_PSO(M=[16, 36], DIR=['sumple_img'])
+    # CIQ_test_PSO(M=[16], DIR=['sumple_img'])
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
     # CIQ_test_Ueda(M=[16, 36], DIR=['sumple_img'])
     # CIQ_test_FCMeans(M=[36], DIR=['sumple_img'])

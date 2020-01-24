@@ -184,7 +184,7 @@ def mapping_pallet_to_img(img, pallete):
 
 def find_closest_color(pix, source):
     tile = np.tile(pix, len(source)).reshape(source.shape)
-    dist = np.linalg.norm(tile - source, axis=2)
+    dist = np.linalg.norm(tile - source, axis=1)
     index = np.argmin(dist)
     return source[index]
 

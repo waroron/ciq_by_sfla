@@ -611,6 +611,8 @@ def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img'], W=[1.0, 2.0, 2.5]):
                     _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
                     Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float64) / np.max(Sv_map)
                     Sv = Sv / (img.shape[0] * img.shape[1])
+                    # epsilon = (img.shape[0] * img.shape[1] * w) / (256 ** 2)
+                    # print(f"epsilon: {epsilon} width: {img.shape[0]} height: {img.shape[1]}")
                     Sv = np.power(Sv, w)
                     q, root, groups = BTPD_WTSE(S, m, Sv)
 
@@ -631,7 +633,7 @@ def CIQ_test_BTPD_withSv(M=[16], DIR=['sumple_img'], W=[1.0, 2.0, 2.5]):
                     dict = {'palette': q,
                             'save_imgs': save_imgs}
                     return dict
-                SAVE = 'BTPD_WTSE_M{}_{}_w{}'.format(m, dir, w)
+                SAVE = 'BTPD_WTSE_M{}_{}_w{}_epsilon'.format(m, dir, w)
                 CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
@@ -1336,7 +1338,7 @@ def CIQ_test_ImpQuantile(M=[16], DIR=['sumple_img'], LIMIT=[1e-4], W=[1.0, 2.0, 
                     CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
 
-def CIQ_test_ImpLenMean(M=[16], DIR=['sumple_img'], LIMIT=[1e-4]):
+def CIQ_test_ImpLenMean(M=[16], DIR=['sumple_img'], LIMIT=[1e-4], W=[1.0, 2.0]):
     """
     重要度を，合計顕著度ではなく，その色の中で最大の顕著度とする
     :param M:
@@ -1358,52 +1360,54 @@ def CIQ_test_ImpLenMean(M=[16], DIR=['sumple_img'], LIMIT=[1e-4]):
     }
     for dir in DIR:
         for m in M:
-            for lim in LIMIT:
-                test_title = 'ImpLenMean_m{}_{}_lim{}'.format(m, dir, lim)
-                def ciq(img, **ciq_status):
-                    trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-                    # trans_img = img.copy()
-                    org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                    S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-                    _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
-                    org_Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
-                    Sv = org_Sv / (img.shape[0] * img.shape[1])
-                    # pre quantize
-                    pre_q, root, pre_groups, pre_sv = BTPD_WTSE_LimitationSv(S, Sv, lim, mode='th')
-                    # pre_q, root, pre_groups = BTPD_WTSE(S, m * 16, org_Sv)
-                    # 与えられたgroupを使えばpremapは必要ない
-                    print(f'preCIQ {len(pre_groups)} colors')
-                    # impの計算
-                    pre_S = []
-                    imp_array = []
-                    mean1_ind = np.argmax(np.array([np.mean(group) for group in pre_sv]))
-                    len1_ind = np.argmax(np.array([len(group) for group in pre_groups]))
-                    coef_mat = np.array([[np.mean(pre_sv[mean1_ind]), len(pre_groups[mean1_ind])],
-                                         [np.mean(pre_sv[len1_ind]), len(pre_groups[len1_ind])]])
-                    inv = np.linalg.inv(coef_mat)
-                    coef_vec = np.matmul(inv, np.array([1.0, 1.0]))
-                    for n in range(len(pre_q)):
-                        this_q = pre_q[n]
-                        this_group = pre_groups[n]
-                        this_sv = pre_sv[n]
-                        # 分散も考慮しようと思ったが，分散の高いグループは，BTPDですでに分割されているはすなのでここでは考慮しない
-                        imp = coef_vec[0] * np.mean(this_sv) + coef_vec[1] * len(this_group)
-                        pre_S.append(this_q)
-                        imp_array.append(imp)
-                    q, root, groups = BTPD_WTSE(pre_S, m, imp_array)
-                    # groupsから分割色の保存
-                    save_imgs = []
-                    # make colormap
-                    # reshape_S = np.reshape(uniq_S, newshape=(len(indices), 1, 3))
-                    colormap = make_colormap(q)
-                    save_imgs.extend(
-                        [
-                         {'img': colormap, 'filename': 'colormap.jpg'}]
-                    )
-                    dict = {'palette': q,
-                            'save_imgs':save_imgs}
-                    return dict
-                CIQ_test(ciq, test_title, test_img=dir, **test_config)
+            for w in W:
+                for lim in LIMIT:
+                    test_title = 'ImpLenMean_m{}_{}_lim{}_w{}'.format(m, dir, lim, w)
+                    def ciq(img, **ciq_status):
+                        trans_img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                        # trans_img = img.copy()
+                        org_S = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                        S = np.reshape(trans_img, newshape=(img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
+                        _, __, Sv_map = get_saliency_hist(trans_img, sm='SR')
+                        org_Sv = np.reshape(Sv_map, newshape=(len(S), 1, 1)).astype(np.float32) / np.max(Sv_map)
+                        Sv = org_Sv / (img.shape[0] * img.shape[1])
+                        Sv = np.power(Sv, w)
+                        # pre quantize
+                        pre_q, root, pre_groups, pre_sv = BTPD_WTSE_LimitationSv(S, Sv, lim, mode='th')
+                        # pre_q, root, pre_groups = BTPD_WTSE(S, m * 16, org_Sv)
+                        # 与えられたgroupを使えばpremapは必要ない
+                        print(f'preCIQ {len(pre_groups)} colors')
+                        # impの計算
+                        pre_S = []
+                        imp_array = []
+                        mean1_ind = np.argmax(np.array([np.mean(group) for group in pre_sv]))
+                        len1_ind = np.argmax(np.array([len(group) for group in pre_groups]))
+                        coef_mat = np.array([[np.mean(pre_sv[mean1_ind]), len(pre_groups[mean1_ind])],
+                                             [np.mean(pre_sv[len1_ind]), len(pre_groups[len1_ind])]])
+                        inv = np.linalg.inv(coef_mat)
+                        coef_vec = np.matmul(inv, np.array([1.0, 1.0]))
+                        for n in range(len(pre_q)):
+                            this_q = pre_q[n]
+                            this_group = pre_groups[n]
+                            this_sv = pre_sv[n]
+                            # 分散も考慮しようと思ったが，分散の高いグループは，BTPDですでに分割されているはすなのでここでは考慮しない
+                            imp = coef_vec[0] * np.mean(this_sv) + coef_vec[1] * len(this_group)
+                            pre_S.append(this_q)
+                            imp_array.append(imp)
+                        q, root, groups = BTPD_WTSE(pre_S, m, imp_array)
+                        # groupsから分割色の保存
+                        save_imgs = []
+                        # make colormap
+                        # reshape_S = np.reshape(uniq_S, newshape=(len(indices), 1, 3))
+                        colormap = make_colormap(q)
+                        save_imgs.extend(
+                            [
+                             {'img': colormap, 'filename': 'colormap.jpg'}]
+                        )
+                        dict = {'palette': q,
+                                'save_imgs':save_imgs}
+                        return dict
+                    CIQ_test(ciq, test_title, test_img=dir, **test_config)
 
 
 def CIQ_test_PreQuantization(M=[16], DIR=['sumple_img']):
@@ -1700,9 +1704,9 @@ if __name__ == '__main__':
     # CIQ_test_KMeans(M=[16, 32, 64], DIR=['sumple_img', 'misc'])
     # CIQ_test_BTPD_WithImpoertance(M=[32], DIR=['sumple_img'], LIMIT=[1000])
     # CIQ_test_ProposalTile(M=[16, 32], DIR=['sumple_img'], DIV=[1], LIMIT=[1000])
-    CIQ_test_BTPD_withSv(M=[16, 36], DIR=['sumple_img'], W=[1.0, 2.0, 3.0])
+    # CIQ_test_BTPD_withSv(M=[16, 36], DIR=['sumple_img'], W=[2.0, 3.0])
     # CIQ_test_SWBTPD(M=[16, 32], DIR=['sumple_img'], Q=[0.7, 0.8, 0.9])
-    CIQ_test_ImpLenMean(M=[16, 36], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5])
+    CIQ_test_ImpLenMean(M=[16, 36], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5], W=[1.0, 2.0])
     # CIQ_test_ImpQuantile(M=[16, 32], DIR=['sumple_img'], STEP=[0.01, 0.05, 0.1], LIMIT=[1e-4, 5e-5])
     # CIQ_test_ProposalImp(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5], W=[1.0, 2.0, 3.0])
     # CIQ_test_ProposalSvSumWeight(M=[16, 32], DIR=['sumple_img'], LIMIT=[1e-4, 5e-5])

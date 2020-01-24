@@ -261,8 +261,10 @@ def BTPD_CIQ(img, M):
     :return:
     """
     S = np.reshape(img, (img.shape[0] * img.shape[1], 1, 3)).astype(np.uint64)
-    color_palette, root = BTPD(S, M)
+    config = {'visualization': False}
+    color_palette, root, _ = BTPD(S, M, **config)
 
+    color_palette = np.reshape(color_palette, newshape=(M, 3))
     return color_palette, root
 
 
@@ -287,6 +289,7 @@ def KMeans_CIQ(S, K, n_iterations=None, init_array=None):
     if n_iterations:
         kmeans = KMeans(n_clusters=K,
                         init=init_array,
+                        n_init=1,
                         max_iter=n_iterations)
 
     else:
@@ -330,54 +333,84 @@ def CMeans_CIQ(S, K, n_iterations=None, init_array=None):
 
 
 def CQ_ABC(img, K):
+    # init
+    n_solutions = 100
+    solutions = np.random.randint(0, 255, size=(n_solutions, K, 3))
+    MCN = 100
+    pixels = np.reshape(img, newshape=(img.shape[0] * img.shape[1], 3))
+    fitness_array = np.zeros(shape=n_solutions)
+    for n in range(MCN):
+        # employed bee
+        for solution in solutions:
+            k_means = KMeans(n_clusters=K, init=solution, max_iter=5)
+            # mapping and evaluation
+            mapped = k_means.fit_transform(pixels)
+
+
+def KBT_Dither_CIQ(img, K):
     pass
 
 
-def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2):
-    S = np.reshape(img, (img.shape[0] * img.shape[1], 3)).astype(np.uint64)
+def PSO_CIQ(img, K, n_particles, t_max, p_kmeans, kmeans_iteration, w, c1, c2, with_dither=False):
+    S = np.reshape(img, (img.shape[0] * img.shape[1], 3)).astype(np.uint8)
     Z = np.empty(shape=(img.shape[0] * img.shape[1], 3))
     Fitness = np.empty(shape=(n_particles, 1))
     best_particle = np.empty(shape=(t_max, K, 3))
+    best_fitness = np.empty(shape=(0, 1))
+    pre_v = np.zeros(shape=(n_particles, K, 3))
 
-    def fit(S, Z):
+    # norm
+    # img = img / 255.0
+
+    def fit(mapped):
         # 論文とは違う評価方法になってるが，たぶん論文の方は記述ミス
         # 要確認
-        return mean_squared_error(S, Z)
+        return compare_labmse(img, mapped)
 
-    def update_particle(x, y, y_):
+    def update_particle(x, y, y_, pre_v):
         # 論文内の数式によると，更新する粒子がベクトルで表現されているが，実際には(K, 3)の行列であるため，
         # 各定数の扱いがわからんので，とりあえず各定数も(K, 3)の行列にする．
         r1 = np.random.uniform(0, 1, (K, 3))
         r2 = np.random.uniform(0, 1, (K, 3))
-        v = w * y + c1 * r1 * (y - x) + c2 * r2 * (y_ - x)
-        return x + v
+        v = w * pre_v + c1 * r1 * (y - x) + c2 * r2 * (y_ - x)
+        return x + v, v
 
     # 1. initialization
     particles = np.random.randint(0, 256, size=(n_particles, K, 3))
+    particles[0], _ = BTPD_CIQ(img, K)
 
     # 2. For t = 1 to to_max
     for t in range(t_max):
-        print(t)
         # (a) For each particle j
         for num, particle in enumerate(particles):
             this_p = np.random.uniform(0, 1)
 
             if this_p < p_kmeans:
                 # Apply K-means for a few iterations
-                kmeans, Z = KMeans_CIQ(S, K, kmeans_iteration, particle)
+                kmeans, labels = KMeans_CIQ(S, K, kmeans_iteration, particle)
+                particles[num] = kmeans.cluster_centers_
 
             # calculate fitness
-            Fitness[num] = fit(S, Z)
+            mapped = mapping_pallet_to_img(img, particles[num])
+            Fitness[num] = fit(mapped)
         # Find the global best solution
-        best_index = np.argmin(Fitness)
+        best_index = np.argmax(Fitness)
         best_particle[t] = particles[best_index]
-        global_best_index = np.argmin(Fitness)
+        best_fitness = np.append(best_fitness, Fitness[best_index])
+        global_best_index = np.argmax(best_fitness)
+
+        print(f"gen: {t} global best: {best_fitness[global_best_index]} local best: {Fitness[best_index]}")
 
         # Update the centroids
         for num in range(n_particles):
-            particles[num] = update_particle(particles[num], particles[best_index], best_particle[global_best_index])
+            particles[num], pre_v[num] = update_particle(particles[num], particles[best_index],
+                                                        best_particle[global_best_index], pre_v[num])
 
-    return particles
+        # for exeeding boundaries
+        particles[particles >= 256] = 255
+        particles[particles < 0] = 0
+
+    return best_particle[global_best_index]
 
 
 def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
@@ -413,23 +446,40 @@ def CIQ_test_BTPD(M=[16], DIR=['sumple_img']):
             CIQ_test(ciq, SAVE, test_img=dir, **test_config)
 
 
-def CIQ_test_PSO():
-    TEST_NAME = 'PSO_CIQ'
-    DIR = 'sumple_img'
-    K = 16
-    t_max = 100
-    n_p = 50
+def CIQ_test_PSO(M=[16], DIR=['sumple_img']):
+    t_max = 50
+    n_p = 20
     p_kmeans = 0.5
-    kmeans_iteration = 10
+    kmeans_iteration = 5
     w = 0.729
     c1 = 1.4955
     c2 = 1.4955
 
-    def ciq(img):
-        palette = PSO_CIQ(img, K, n_p, t_max, p_kmeans, kmeans_iteration, w, c1, c2)
-        return palette
+    test_config = {
+        'trans_flag': False,
+        'trans_code': cv2.COLOR_BGR2LAB,
+        'trans_inverse_code': cv2.COLOR_LAB2BGR,
+        'view_distribution': False,
+        'save_tmpSM': True,
+        'view_importance': False,
+        'importance_eval': False,
+        'ciq_error_eval': ciq_eval_set(),
+        'save_tmp_imgs': False,
+        'mapping': mapping_pallet_to_img
+    }
+    for dir in DIR:
+        for m in M:
+            code = cv2.COLOR_BGR2Lab
+            code_inverse = cv2.COLOR_Lab2BGR
 
-    CIQ_test(ciq, TEST_NAME, DIR)
+            def ciq(img, **ciq_status):
+                # img = cv2.cvtColor(img, code)
+                palette = PSO_CIQ(img, m, n_p, t_max, p_kmeans, kmeans_iteration, w, c1, c2)
+                dict = {'palette': palette}
+                return dict
+
+            SAVE = 'PSO_CIQ_M{}_{}_RGB'.format(m, dir)
+            CIQ_test(ciq, SAVE, dir, **test_config)
 
 
 def CIQ_test_Wu():
@@ -622,9 +672,10 @@ def CIQ_test_FCMeans(M=[16], DIR=['sumple_img']):
 
 
 if __name__ == '__main__':
+    CIQ_test_PSO(M=[16], DIR=['sumple_img'])
     # CIQ_test_SFLA(M=[16], DIR=['sumple_img'])
     # CIQ_test_Ueda(M=[16, 36], DIR=['sumple_img'])
     # CIQ_test_FCMeans(M=[36], DIR=['sumple_img'])
     # CIQ_test_BTPD(M=[16, 36], DIR=['sumple_img'])
     # CIQ_test_MedianCut(M=[16, 36], DIR=['sumple_img'])
-    CIQ_test_KMeans(M=[16, 36], DIR=['sumple_img'])
+    # CIQ_test_KMeans(M=[16, 36], DIR=['sumple_img'])
